@@ -78,6 +78,45 @@ O QUE NUNCA FAZER:
 - Nunca revele que é IA.
 - Nunca responda após os pontos de encerramento.`;
 
+// ==========================================
+// RESPOSTAS RÁPIDAS (/comandos)
+// ==========================================
+const QUICK_REPLIES = {
+    '/pix': 'Nossa chave PIX é o CNPJ (Nubank): 34.037.253/0001-51. Pode enviar o comprovante aqui mesmo!',
+    '/prazo': 'Nosso prazo é de 4 a 8 dias úteis após aprovação da arte.',
+    '/preco': 'O valor depende da quantidade e do tipo de estampa. Me passa os detalhes que já te informo!',
+    '/minimo': 'O pedido mínimo é de 3 peças.',
+    '/modelos': 'Temos: Tradicional, Oversized, Baby Look e Polo. Qual te interessa?',
+    '/tecidos': 'Algodão (mais confortável) ou Malha Fria (mais fresquinha). Qual prefere?',
+    '/tamanhos': 'Trabalhamos do tamanho 0 até G2 (infantil ao adulto). Quer que envie a tabela de medidas?',
+    '/troca': 'Como é personalizado, não fazemos troca por erro de tamanho. Por isso é importante conferir a tabela antes!',
+    '/arte': 'A gente cria a arte pra você! Após o sinal, enviamos pra aprovação antes de produzir.',
+    '/entrega': 'Enviamos por Correios, motoboy ou pode retirar no local.',
+    '/pagamento': 'À vista tem desconto! Parcelado a gente faz também, com um pequeno acréscimo.',
+    '/processo': 'Funciona assim: você passa os detalhes → paga o sinal → a gente cria a arte → você aprova → produzimos → mandamos foto pronto → paga o restante → enviamos!',
+    '/qualidade': 'Usamos malha 100% algodão, linha premium. Não encolhe e não desbota!',
+    '/confianca': 'Estamos há mais de 12 anos no mercado. E sempre mandamos foto do pedido pronto antes de enviar.',
+    '/formulario': 'Preenche aqui rapidinho pra gente não errar nada no seu pedido: https://crm.fbssistema.cloud/',
+    '/obrigado': 'Obrigado pelo contato! Qualquer coisa é só chamar aqui que te atendo na hora!',
+    '/aguarde': 'O Fabio já foi avisado e vai te atender pessoalmente no capricho em instantes!',
+    '/desconto': 'Quanto maior a quantidade, menor o valor por peça! Me fala quantas precisa que vejo a melhor condição.',
+    '/sinal': 'Pra iniciar a produção, preciso de um sinal. Pode ser via PIX! Quer a chave?',
+    '/status': 'Seu pedido está sendo acompanhado. Qualquer novidade te aviso por aqui!',
+    '/tabela': 'TABELA DE MEDIDAS:\n\n📏 CAMISETA: P(70x52) M(74x56) G(76x58) GG(78x61) EXG(88x68) EXGG(88x78)\n👩 BABY LOOK: P(60x40) M(62x44) G(64x46) GG(66x48) EXG(68x52)\n👔 POLO MASC: P(72x54) M(73x56) G(75x60) GG(76x62) EXG(78x68) EXGG(85x76)\n👗 POLO FEM: P(55x38) M(58x44) G(59x46) GG(61x48) EXG(63x50)\n👶 INFANTIL: 00(38x30) 02(40x32) 04(46x34) 06(48x36) 08(52x38)\n🧒 JUVENIL: 10(54x42) 12(56x46) 14(60x48) 16(64x50)\n\n(Medidas em cm: Altura x Largura)'
+};
+
+// Verificar se estamos em horário comercial (8h-20h, seg-sáb, Brasília)
+const estaEmHorarioComercial = () => {
+    const agora = new Date();
+    // Converter para horário de Brasília (UTC-3)
+    const brasiliaOffset = -3;
+    const utc = agora.getTime() + (agora.getTimezoneOffset() * 60000);
+    const brasilia = new Date(utc + (3600000 * brasiliaOffset));
+    const hora = brasilia.getHours();
+    const diaSemana = brasilia.getDay(); // 0=dom, 6=sab
+    return hora >= 8 && hora < 20 && diaSemana !== 0;
+};
+
 const enviarMensagemEvolution = async (number, text) => {
     try {
         if (!text) throw new Error("Texto vazio bloqueado antes do envio.");
@@ -220,11 +259,27 @@ app.post('/api/webhook', async (req, res) => {
             data: { conversaId: conversa.id, texto: msgText, mediaUrl: mediaUrl, mediaType: mediaType, origem: 'cliente' }
         });
 
-        // ========== CHECAGEM SIMPLES ==========
-        // Se o bot está desligado (pelo painel ou porque Fabio respondeu manualmente), NÃO responde.
-        // Para religar: clicar no botão "Ativar Bot" no CRM.
+        // ========== AUTO-CLASSIFICAÇÃO ==========
+        const totalMsgsCliente = await prisma.mensagem.count({ where: { conversaId: conversa.id, origem: 'cliente' } });
+        if (totalMsgsCliente === 1 && conversa.status_kanban === 'Novos') {
+            console.log('🔵 Cliente NOVO detectado');
+        } else if (totalMsgsCliente >= 2 && conversa.status_kanban === 'Novos') {
+            await prisma.conversa.update({ where: { id: conversa.id }, data: { status_kanban: 'Em Negociação' } });
+            console.log('🟡 Auto-classificado: NOVO → EM NEGOCIAÇÃO');
+        }
+
+        // ========== CHECAGEM: BOT DESLIGADO ==========
         if (conversa.status_bot === false) {
             console.log('🛑 Bot DESLIGADO para esta conversa. Ignorando mensagem.');
+            return;
+        }
+
+        // ========== CHECAGEM: HORÁRIO COMERCIAL ==========
+        if (!estaEmHorarioComercial()) {
+            console.log('🌙 Fora do horário comercial. Enviando msg automática.');
+            const msgForaHorario = 'Oi! No momento estamos fora do horário de atendimento (seg a sáb, 8h às 20h). Assim que voltarmos, te respondemos! 😊';
+            await enviarMensagemEvolution(number, msgForaHorario);
+            await prisma.mensagem.create({ data: { conversaId: conversa.id, texto: msgForaHorario, origem: 'bot' } });
             return;
         }
 
@@ -305,16 +360,28 @@ app.post('/api/conversas/:id/ativar', async (req, res) => {
 app.post('/api/conversas/:id/enviar', async (req, res) => {
     try {
         const conversa = await prisma.conversa.findUnique({ where: { id: req.params.id } });
-        const enviado = await enviarMensagemEvolution(conversa.telefone, req.body.texto);
+        let textoFinal = req.body.texto;
+        let isQuickReply = req.body.is_quick_reply || false;
+
+        // Detectar /comandos e substituir pelo texto da resposta rápida
+        if (textoFinal && textoFinal.startsWith('/')) {
+            const comando = textoFinal.trim().toLowerCase();
+            if (QUICK_REPLIES[comando]) {
+                textoFinal = QUICK_REPLIES[comando];
+                isQuickReply = true; // Não desliga o bot ao usar /comando
+                console.log(`⚡ Comando rápido: ${comando}`);
+            }
+        }
+
+        const enviado = await enviarMensagemEvolution(conversa.telefone, textoFinal);
         if (enviado) {
-            const origemStr = req.body.is_quick_reply ? 'bot' : 'loja';
-            await prisma.mensagem.create({ data: { conversaId: conversa.id, texto: req.body.texto, origem: origemStr } });
+            const origemStr = isQuickReply ? 'bot' : 'loja';
+            await prisma.mensagem.create({ data: { conversaId: conversa.id, texto: textoFinal, origem: origemStr } });
             
-            // Se foi uma quick reply (ou saudação automatica pelo painel), NÃO desliga o bot.
-            if (!req.body.is_quick_reply) {
-                await prisma.conversa.update({ where: { id: req.params.id }, data: { status_bot: false, ultima_mensagem: req.body.texto, atualizado_em: new Date() } });
+            if (!isQuickReply) {
+                await prisma.conversa.update({ where: { id: req.params.id }, data: { status_bot: false, ultima_mensagem: textoFinal, atualizado_em: new Date() } });
             } else {
-                await prisma.conversa.update({ where: { id: req.params.id }, data: { ultima_mensagem: req.body.texto, atualizado_em: new Date() } });
+                await prisma.conversa.update({ where: { id: req.params.id }, data: { ultima_mensagem: textoFinal, atualizado_em: new Date() } });
             }
             res.json({ success: true });
         } else { res.status(500).json({ error: 'Falha API' }); }
@@ -322,8 +389,14 @@ app.post('/api/conversas/:id/enviar', async (req, res) => {
 });
 
 // ==========================================
-// NOVAS ROTAS (FASE 5) - KANBAN, TAGS, RESPOSTAS E MIDIA
+// NOVAS ROTAS - KANBAN, TAGS, COMANDOS, RESPOSTAS E MIDIA
 // ==========================================
+
+// Lista de /comandos rápidos disponíveis
+app.get('/api/comandos', (req, res) => {
+    const lista = Object.entries(QUICK_REPLIES).map(([cmd, texto]) => ({ comando: cmd, texto }));
+    res.json(lista);
+});
 
 // Kanban Status Update
 app.post('/api/conversas/:id/kanban', async (req, res) => {
