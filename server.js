@@ -363,13 +363,19 @@ app.post('/api/conversas/:id/enviar', async (req, res) => {
         let textoFinal = req.body.texto;
         let isQuickReply = req.body.is_quick_reply || false;
 
-        // Detectar /comandos e substituir pelo texto da resposta rápida
+        // Detectar /comandos e buscar resposta do BANCO DE DADOS
         if (textoFinal && textoFinal.startsWith('/')) {
             const comando = textoFinal.trim().toLowerCase();
-            if (QUICK_REPLIES[comando]) {
+            const respostaDB = await prisma.respostaRapida.findFirst({ where: { atalho: comando } });
+            if (respostaDB) {
+                textoFinal = respostaDB.texto;
+                isQuickReply = true;
+                console.log(`⚡ Comando rápido (DB): ${comando}`);
+            } else if (QUICK_REPLIES[comando]) {
+                // Fallback: usa o dicionário fixo se não encontrar no banco
                 textoFinal = QUICK_REPLIES[comando];
-                isQuickReply = true; // Não desliga o bot ao usar /comando
-                console.log(`⚡ Comando rápido: ${comando}`);
+                isQuickReply = true;
+                console.log(`⚡ Comando rápido (fallback): ${comando}`);
             }
         }
 
@@ -449,16 +455,51 @@ app.post('/api/conversas/:id/enviar-midia', upload.single('file'), async (req, r
     }
 });
 
-// Respostas Rápidas Manuseio
+// Respostas Rápidas - CRUD Completo
 app.get('/api/respostas', async (req, res) => {
-    const respostas = await prisma.respostaRapida.findMany();
+    const respostas = await prisma.respostaRapida.findMany({ orderBy: { atalho: 'asc' } });
     res.json(respostas);
 });
 
 app.post('/api/respostas', async (req, res) => {
-    const { atalho, texto, midiaUrl, midiaTipo } = req.body;
-    const r = await prisma.respostaRapida.create({ data: { atalho, texto, midiaUrl, midiaTipo } });
-    res.json(r);
+    try {
+        const { atalho, texto, midiaUrl, midiaTipo } = req.body;
+        const atalhoFormatado = atalho.startsWith('/') ? atalho.toLowerCase() : '/' + atalho.toLowerCase();
+        const r = await prisma.respostaRapida.create({ data: { atalho: atalhoFormatado, texto, midiaUrl, midiaTipo } });
+        res.json(r);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/respostas/:id', async (req, res) => {
+    try {
+        const { atalho, texto, midiaUrl, midiaTipo } = req.body;
+        const r = await prisma.respostaRapida.update({ 
+            where: { id: req.params.id }, 
+            data: { atalho: atalho ? (atalho.startsWith('/') ? atalho.toLowerCase() : '/' + atalho.toLowerCase()) : undefined, texto, midiaUrl, midiaTipo } 
+        });
+        res.json(r);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/respostas/:id', async (req, res) => {
+    try {
+        await prisma.respostaRapida.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Seed: popular banco com os comandos padrão (rodar uma vez)
+app.post('/api/respostas/seed', async (req, res) => {
+    try {
+        const existentes = await prisma.respostaRapida.count();
+        if (existentes > 0) return res.json({ message: `Já existem ${existentes} respostas. Seed ignorado.` });
+        
+        const entries = Object.entries(QUICK_REPLIES);
+        for (const [atalho, texto] of entries) {
+            await prisma.respostaRapida.create({ data: { atalho, texto } });
+        }
+        res.json({ success: true, total: entries.length });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Pedidos ERP
