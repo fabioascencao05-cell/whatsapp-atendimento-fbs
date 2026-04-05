@@ -63,10 +63,15 @@ const gerarRespostaIA = async (conversaId, nomeCliente, novaPergunta) => {
     }
 }
 
+// Nova rota de verificação de status exigida
+app.get('/api/status', (req, res) => {
+    res.json({ status: "API ONLINE e RESPONDENDO" });
+});
+
 // ==========================================
 // WEBHOOK OBRIGATÓRIA E CORRIGIDA
 // ==========================================
-app.post('/webhook', async (req, res) => {
+app.post('/api/webhook', async (req, res) => {
     console.log('📬 [WEBHOOK RECEBIDO]:', JSON.stringify(req.body, null, 2));
     res.status(200).send('OK');
 
