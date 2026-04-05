@@ -162,35 +162,16 @@ app.post('/api/webhook', async (req, res) => {
             data: { conversaId: conversa.id, texto: msgText, mediaUrl: mediaUrl, mediaType: mediaType, origem: 'cliente' }
         });
 
-        // ========== LÓGICA DE SILÊNCIO SIMPLIFICADA ==========
-        // Só silencia se o HUMANO (Fabio) mandou mensagem manual nos últimos 10 min
-        const ultimaMsgHumana = await prisma.mensagem.findFirst({
-            where: { conversaId: conversa.id, origem: 'loja' },
-            orderBy: { criado_em: 'desc' }
-        });
-
-        let silencio = false;
-        if (ultimaMsgHumana) {
-            const minutosSilencio = (new Date() - ultimaMsgHumana.criado_em) / 60000;
-            if (minutosSilencio <= 10 && conversa.status_bot === false) {
-                // Humano falou há menos de 10 min E o bot está desligado manualmente
-                silencio = true;
-                console.log(`🤫 Silêncio ativo: humano falou há ${minutosSilencio.toFixed(1)} min`);
-            } else if (minutosSilencio > 10 && conversa.status_bot === false) {
-                // Já passou 10 min, religa o bot automaticamente
-                await prisma.conversa.update({ where: { id: conversa.id }, data: { status_bot: true }});
-                conversa.status_bot = true;
-                console.log('🔄 Bot religado automaticamente (10 min de silêncio humano)');
-            }
-        } else if (conversa.status_bot === false) {
-            // Bot desligado manualmente pelo painel e sem mensagens humanas
-            // Respeitar a decisão manual — NÃO religar
-            silencio = true;
-            console.log('🛑 Bot desligado manualmente pelo painel (respeitando)');
+        // ========== CHECAGEM SIMPLES ==========
+        // Se o bot está desligado (pelo painel ou porque Fabio respondeu manualmente), NÃO responde.
+        // Para religar: clicar no botão "Ativar Bot" no CRM.
+        if (conversa.status_bot === false) {
+            console.log('🛑 Bot DESLIGADO para esta conversa. Ignorando mensagem.');
+            return;
         }
 
         // ========== ACIONAR IA ==========
-        if (conversa.status_bot === true && !silencio && !mediaType) {
+        if (!mediaType) {
             console.log('🤖 Checando chave do Gemini para Acionar IA...');
             if(!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'no_key') {
                 console.log('❌ IA CANCELADA: GEMINI_API_KEY não foi encontrada nas variáveis de ambiente!');
