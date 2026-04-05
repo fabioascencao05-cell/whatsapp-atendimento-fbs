@@ -18,6 +18,10 @@ model Conversa {
   status_kanban   String     @default("Novos") // Novos, Em Orçamento, Aguardando Arte/Aprovação, Em Produção, Finalizado
   tags            String?    // Ex: "Atacado,Urgente"
   
+  // Master Phase
+  unreadCount     Int        @default(0)
+  lembrete_horas  Int?       // Quantas horas para disparar o follow-up se não houver resposta
+  
   criado_em       DateTime   @default(now())
   atualizado_em   DateTime   @updatedAt
   mensagens       Mensagem[]
@@ -33,6 +37,10 @@ model Mensagem {
   // Phase 5 Fills
   mediaUrl   String?
   mediaType  String?  // 'image', 'audio', 'video', 'document'
+  
+  // Master Phase
+  agendado_para DateTime?
+  status_envio  String?   // "Pendente", "Enviado", "Falha" (Usado só se agendado)
   
   origem     String   // "cliente" ou "bot" ou "loja"
   criado_em  DateTime @default(now())
@@ -57,5 +65,7 @@ model RespostaRapida {
   id         String   @id @default(uuid())
   atalho     String   // ex: "/pix"
   texto      String   // ex: "Nossa chave pix é X"
+  midiaUrl   String?  // novo: url para anexo de media
+  midiaTipo  String?  // novo: image/audio/etc
   criado_em  DateTime @default(now())
 }

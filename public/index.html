@@ -15,6 +15,7 @@
         }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-navy-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
@@ -30,6 +31,7 @@
             <div class="flex gap-1 ml-4 border-l border-slate-700 pl-6 text-sm font-medium">
                 <button onclick="switchTab('chat')" id="tab-chat" class="px-4 py-1.5 rounded-md bg-slate-700 text-slate-100 transition">Atendimento</button>
                 <button onclick="switchTab('kanban')" id="tab-kanban" class="px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition flex items-center gap-2"><i data-lucide="trello" class="h-4 w-4"></i> Kanban</button>
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition flex items-center gap-2"><i data-lucide="pie-chart" class="h-4 w-4"></i> Dashboard</button>
             </div>
         </div>
     </nav>
@@ -74,7 +76,14 @@
                             <span id="chat-telefone" class="text-xs text-slate-400">+55</span>
                         </div>
                     </div>
-                    <div>
+                    <div class="flex items-center gap-3">
+                        <select id="chat-kanban-status" onchange="alterarKanbanAtivo(this.value)" class="bg-slate-700 text-xs rounded border border-slate-600 px-2 py-1 text-slate-200 focus:outline-none focus:border-primary">
+                            <option value="Novos">Novos</option>
+                            <option value="Em Orçamento">Em Orçamento</option>
+                            <option value="Aguardando Arte/Aprovação">Aguardando Arte</option>
+                            <option value="Em Produção">Em Produção</option>
+                            <option value="Finalizado">Finalizado</option>
+                        </select>
                         <button id="btn-robo" onclick="alternarRobo()" class="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20 transition text-sm font-medium">
                             <i data-lucide="bot" class="h-4 w-4"></i> Pausar Robô
                         </button>
@@ -96,7 +105,11 @@
                     <input type="file" id="file-uploader" class="hidden" onchange="uploadArquivo()">
                     
                     <div class="flex gap-2 items-center">
-                        <button onclick="document.getElementById('file-uploader').click()" class="p-3 text-slate-400 hover:text-slate-200 transition bg-slate-700/50 rounded-lg"><i data-lucide="paperclip" class="h-5 w-5"></i></button>
+                        <button onclick="document.getElementById('file-uploader').click()" class="p-3 text-slate-400 hover:text-slate-200 transition bg-slate-700/50 rounded-lg" title="Anexar Arquivo"><i data-lucide="paperclip" class="h-5 w-5"></i></button>
+                        <div class="relative items-center flex">
+                             <input type="datetime-local" id="input-agendar" class="hidden absolute bottom-12 left-0 bg-navy-800 border border-slate-600 rounded-lg p-2 text-sm text-slate-200 w-48 shadow-lg">
+                             <button onclick="toggleAgendar()" class="p-3 text-amber-500 hover:text-amber-400 transition bg-slate-700/50 rounded-lg ml-1" title="Agendar Mensagem"><i data-lucide="clock" class="h-5 w-5"></i></button>
+                        </div>
                         <input type="text" id="input-msg" oninput="checarQuickReply(this.value)" class="flex-1 bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-primary placeholder-slate-400" placeholder="Digite uma mensagem (Use / para respostas rápidas)..." onkeypress="if(event.key==='Enter') enviarMsg()">
                         <button onclick="enviarMsg()" class="px-5 py-3 bg-primary hover:bg-blue-600 transition text-white rounded-lg flex items-center gap-2 font-medium shadow-md shadow-blue-500/20">
                             Enviar <i data-lucide="send" class="h-4 w-4"></i>
@@ -106,12 +119,44 @@
             </div>
         </main>
 
-        <!-- COL 3: ERP -->
-        <aside id="erp-area" class="w-[340px] bg-navy-800 border-l border-slate-700 flex flex-col shrink-0 hidden">
-            <div class="p-5 border-b border-slate-700">
-                <h2 class="font-semibold text-slate-200 flex items-center gap-2"><i data-lucide="shopping-bag" class="h-4 w-4 text-primary"></i> ERP Painel</h2>
+        <!-- COL 3: ERP & INFO (Right Sidebar Retrátil) -->
+        <aside id="erp-area" class="w-[360px] bg-navy-800 border-l border-slate-700 flex flex-col shrink-0 hidden transition-all duration-300">
+            <div class="flex justify-between items-center bg-navy-900 border-b border-slate-700">
+                <button onclick="toggleRightTab('info')" id="btn-tab-info" class="flex-1 py-3 text-sm font-semibold text-primary border-b-2 border-primary bg-navy-800">Cadastro & Infos</button>
+                <button onclick="toggleRightTab('erp')" id="btn-tab-erp" class="flex-1 py-3 text-sm font-semibold text-slate-400 border-b-2 border-transparent">ERP Vendas</button>
             </div>
-            <div class="flex-1 overflow-y-auto p-5">
+            
+            <!-- ABA INFO / RESPOSTAS RÁPIDAS -->
+            <div id="right-tab-info" class="flex-1 flex flex-col overflow-hidden">
+                 <div class="p-5 border-b border-slate-700 flex items-center gap-4 bg-navy-800/50">
+                     <div class="h-14 w-14 rounded-full bg-slate-700 flex items-center justify-center shrink-0">
+                         <i data-lucide="user" class="h-7 w-7 text-slate-400"></i>
+                     </div>
+                     <div class="min-w-0">
+                         <h2 id="info-nome" class="font-bold text-slate-100 text-lg truncate">Cliente</h2>
+                         <p id="info-telefone" class="text-slate-400 text-sm truncate">+55</p>
+                     </div>
+                 </div>
+                 <div class="p-4 border-b border-slate-700">
+                     <p class="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Ações Automáticas</p>
+                     <div class="flex gap-2">
+                          <select id="followup-horas" class="bg-slate-700 text-xs rounded border border-slate-600 px-2 py-2 text-slate-200 focus:outline-none focus:border-primary flex-1">
+                               <option value="">Sem Lembrete</option><option value="2">Lembra em 2 horas</option><option value="24">Lembrar amanhã (24h)</option>
+                          </select>
+                          <button onclick="salvarFollowUp()" class="bg-primary/20 text-primary border border-primary/30 px-3 rounded hover:bg-primary/30 transition text-xs font-bold">Cobrar</button>
+                     </div>
+                 </div>
+                 <div class="flex-1 overflow-y-auto p-4 kanban-board">
+                     <div class="flex justify-between items-end mb-3 mt-1">
+                         <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Respostas Rápidas</p>
+                         <button onclick="novaRespostaRapida()" class="text-primary hover:text-blue-400 text-xs flex items-center gap-1"><i data-lucide="plus" class="h-3 w-3"></i> Adicionar</button>
+                     </div>
+                     <div id="side-respostas-list" class="flex flex-col gap-2"></div>
+                 </div>
+            </div>
+
+            <!-- ABA ERP -->
+            <div id="right-tab-erp" class="flex-1 overflow-y-auto p-5 hidden">
                 <div class="bg-navy-900 border border-slate-700 rounded-lg p-4 mb-6 shadow-lg">
                     <h3 class="text-sm font-semibold text-slate-300 mb-3 border-b border-slate-700 pb-2">Novo Pedido</h3>
                     <div class="grid grid-cols-2 gap-2 mb-3">
@@ -154,6 +199,35 @@
         
         <div class="flex-1 flex gap-4 overflow-x-auto pb-4 kanban-board" id="kanban-container">
             <!-- Renderizado Pelo JS -->
+        </div>
+    </section>
+
+    <!-- SECTION: DASHBOARD -->
+    <section id="sec-dashboard" class="hidden flex-1 flex-col overflow-auto bg-navy-900 p-8">
+        <div class="max-w-6xl w-full mx-auto">
+            <h2 class="text-2xl font-bold mb-8 flex items-center gap-3"><i data-lucide="pie-chart" class="h-6 w-6 text-primary"></i> Visão Operacional</h2>
+            
+            <div class="grid grid-cols-3 gap-6 mb-8">
+                <div class="bg-navy-800 border border-slate-700 p-6 rounded-xl shadow-lg">
+                    <p class="text-slate-400 text-sm font-medium mb-1">Velocidade Média da IA</p>
+                    <h3 id="dash-avg" class="text-3xl font-bold text-slate-100">--</h3>
+                </div>
+                <div class="bg-navy-800 border border-slate-700 p-6 rounded-xl shadow-lg">
+                    <p class="text-slate-400 text-sm font-medium mb-1">Total de Leads Ativos</p>
+                    <h3 id="dash-total" class="text-3xl font-bold text-primary">--</h3>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-8">
+                <div class="bg-navy-800 border border-slate-700 p-6 rounded-xl shadow-lg">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-200">Volume de Mensagens (7 dias)</h4>
+                    <div class="h-64 relative"><canvas id="chart-volume"></canvas></div>
+                </div>
+                <div class="bg-navy-800 border border-slate-700 p-6 rounded-xl shadow-lg">
+                    <h4 class="text-lg font-semibold mb-4 text-slate-200">Distribuição no Funil (Kanban)</h4>
+                    <div class="h-64 relative flex justify-center"><canvas id="chart-kanban"></canvas></div>
+                </div>
+            </div>
         </div>
     </section>
 

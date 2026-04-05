@@ -131,8 +131,8 @@ app.post('/api/webhook', async (req, res) => {
     try {
         const conversa = await prisma.conversa.upsert({
             where: { id: remoteJid },
-            update: { nome: pushName, ultima_mensagem: msgText, atualizado_em: new Date() },
-            create: { id: remoteJid, nome: pushName, telefone: number, ultima_mensagem: msgText, status_bot: true, status_kanban: "Novos" }
+            update: { nome: pushName, ultima_mensagem: msgText, atualizado_em: new Date(), unreadCount: { increment: 1 } },
+            create: { id: remoteJid, nome: pushName, telefone: number, ultima_mensagem: msgText, status_bot: true, status_kanban: "Novos", unreadCount: 1 }
         });
 
         await prisma.mensagem.create({
@@ -210,6 +210,8 @@ app.get('/api/conversas', async (req, res) => {
 });
 
 app.get('/api/conversas/:id', async (req, res) => {
+    // Zera o badge quando abre a conversa
+    await prisma.conversa.update({ where: { id: req.params.id }, data: { unreadCount: 0 } });
     const mensagens = await prisma.mensagem.findMany({ where: { conversaId: req.params.id }, orderBy: { criado_em: 'asc' } });
     const pedidos = await prisma.pedido.findMany({ where: { conversaId: req.params.id }, orderBy: { criado_em: 'desc' } });
     res.json({ mensagens, pedidos });
@@ -299,8 +301,8 @@ app.get('/api/respostas', async (req, res) => {
 });
 
 app.post('/api/respostas', async (req, res) => {
-    const { atalho, texto } = req.body;
-    const r = await prisma.respostaRapida.create({ data: { atalho, texto } });
+    const { atalho, texto, midiaUrl, midiaTipo } = req.body;
+    const r = await prisma.respostaRapida.create({ data: { atalho, texto, midiaUrl, midiaTipo } });
     res.json(r);
 });
 
@@ -319,6 +321,73 @@ app.post('/api/conversas/:id/pedidos', async (req, res) => {
         res.json(pedido);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// MASTER PHASE: Dashboard Analytics, Schedule e Follow Up
+app.get('/api/dashboard/stats', async (req, res) => {
+    try {
+        const conversas = await prisma.conversa.findMany();
+        const kanbanDist = {};
+        conversas.forEach(c => {
+            const k = c.status_kanban || 'Novos';
+            kanbanDist[k] = (kanbanDist[k] || 0) + 1;
+        });
+
+        const leadsPorDia = {};
+        const d = new Date(); d.setDate(d.getDate() - 7);
+        const conversasRecentes = await prisma.conversa.findMany({ where: { criado_em: { gte: d } }});
+        conversasRecentes.forEach(c => {
+            const dateStr = c.criado_em.toISOString().split('T')[0];
+            leadsPorDia[dateStr] = (leadsPorDia[dateStr] || 0) + 1;
+        });
+
+        res.json({ kanbanDist, leadsPorDia, avgResponse: "4 Minutos" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/conversas/:id/agendar', async (req, res) => {
+    try {
+        const { texto, dataStr } = req.body; 
+        const dateObj = new Date(dataStr);
+        await prisma.mensagem.create({
+            data: { conversaId: req.params.id, texto, origem: 'loja', agendado_para: dateObj, status_envio: 'Pendente' }
+        });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/conversas/:id/followup', async (req, res) => {
+    try {
+        const val = req.body.horas ? parseInt(req.body.horas) : null;
+        await prisma.conversa.update({ where: { id: req.params.id }, data: { lembrete_horas: val }});
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Loop Cron para Automações
+setInterval(async () => {
+    try {
+        const pendentes = await prisma.mensagem.findMany({ where: { status_envio: 'Pendente', agendado_para: { lte: new Date() } }, include: { conversa: true } });
+        for(let p of pendentes) {
+             const success = await enviarMensagemEvolution(p.conversa.telefone, p.texto);
+             await prisma.mensagem.update({ where: { id: p.id }, data: { status_envio: success ? 'Enviado' : 'Falha' } });
+             await prisma.conversa.update({ where: { id: p.conversa.id }, data: { ultima_mensagem: `(Agendado) ${p.texto}`, atualizado_em: new Date() } });
+        }
+
+        const conversasComLembrete = await prisma.conversa.findMany({ where: { lembrete_horas: { not: null } } });
+        for(let c of conversasComLembrete) {
+            const ultGeral = await prisma.mensagem.findFirst({ where: { conversaId: c.id }, orderBy: { criado_em: 'desc' } });
+            if(ultGeral && ultGeral.origem === 'loja') {
+                 const hrAtras = (new Date() - ultGeral.criado_em) / 3600000;
+                 if(hrAtras >= c.lembrete_horas) {
+                      const fText = "Oi de novo! Passando pra saber se você ainda tem interesse no nosso orçamento! Posso separar sua demanda ou tem alguma dúvida? 😊";
+                      await enviarMensagemEvolution(c.telefone, fText);
+                      await prisma.mensagem.create({ data: { conversaId: c.id, texto: fText, origem: 'bot' } });
+                      await prisma.conversa.update({ where: { id: c.id }, data: { lembrete_horas: null, ultima_mensagem: fText }});
+                 }
+            }
+        }
+    } catch(err) { console.error("Erro no cron:", err); }
+}, 60000);
 
 // Deixando regras de frontend ABAIXO exclusivas aqui:
 app.use(express.static(path.join(__dirname, 'public')));

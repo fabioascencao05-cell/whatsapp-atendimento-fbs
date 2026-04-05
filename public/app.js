@@ -3,17 +3,42 @@ let todasConversas = [];
 let respostasRapidas = [];
 
 function switchTab(tab) {
+    document.getElementById('sec-chat').classList.add('hidden');
+    document.getElementById('sec-kanban').classList.add('hidden');
+    document.getElementById('sec-dashboard').classList.add('hidden');
+
+    document.getElementById('tab-chat').className = 'px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition flex items-center gap-2';
+    document.getElementById('tab-kanban').className = 'px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition flex items-center gap-2';
+    document.getElementById('tab-dashboard').className = 'px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition flex items-center gap-2';
+
     if(tab === 'chat') {
         document.getElementById('sec-chat').classList.remove('hidden');
-        document.getElementById('sec-kanban').classList.add('hidden');
         document.getElementById('tab-chat').className = 'px-4 py-1.5 rounded-md bg-slate-700 text-slate-100 transition';
-        document.getElementById('tab-kanban').className = 'px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition flex items-center gap-2';
-    } else {
-        document.getElementById('sec-chat').classList.add('hidden');
+    } else if (tab === 'kanban') {
         document.getElementById('sec-kanban').classList.remove('hidden');
         document.getElementById('tab-kanban').className = 'px-4 py-1.5 rounded-md bg-slate-700 text-slate-100 transition flex items-center gap-2';
-        document.getElementById('tab-chat').className = 'px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition';
         renderizarKanban();
+    } else {
+        document.getElementById('sec-dashboard').classList.remove('hidden');
+        document.getElementById('sec-dashboard').classList.add('flex');
+        document.getElementById('tab-dashboard').className = 'px-4 py-1.5 rounded-md bg-slate-700 text-slate-100 transition flex items-center gap-2';
+        carregarDashboard();
+    }
+}
+
+function toggleRightTab(tab) {
+    if(tab === 'info') {
+        document.getElementById('right-tab-info').classList.remove('hidden');
+        document.getElementById('right-tab-info').classList.add('flex');
+        document.getElementById('right-tab-erp').classList.add('hidden');
+        document.getElementById('btn-tab-info').className = 'flex-1 py-3 text-sm font-semibold text-primary border-b-2 border-primary bg-navy-800 transition';
+        document.getElementById('btn-tab-erp').className = 'flex-1 py-3 text-sm font-semibold text-slate-400 border-b-2 border-transparent transition';
+    } else {
+        document.getElementById('right-tab-erp').classList.remove('hidden');
+        document.getElementById('right-tab-info').classList.add('hidden');
+        document.getElementById('right-tab-info').classList.remove('flex');
+        document.getElementById('btn-tab-erp').className = 'flex-1 py-3 text-sm font-semibold text-primary border-b-2 border-primary bg-navy-800 transition';
+        document.getElementById('btn-tab-info').className = 'flex-1 py-3 text-sm font-semibold text-slate-400 border-b-2 border-transparent transition';
     }
 }
 
@@ -102,11 +127,22 @@ async function dropKanban(e, novoStatus) {
     if(conversa && (conversa.status_kanban || 'Novos') !== novoStatus) {
         conversa.status_kanban = novoStatus;
         renderizarKanban(); // Optimistic
+        if(conversaAtual && conversaAtual.id === id) { document.getElementById('chat-kanban-status').value = novoStatus; }
         try {
             await fetch(`/api/conversas/${id}/kanban`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status: novoStatus})});
             showToast(`Movido para ${novoStatus}`, 'info');
         } catch(e) {}
     }
+}
+
+async function alterarKanbanAtivo(novoStatus) {
+    if(!conversaAtual) return;
+    conversaAtual.status_kanban = novoStatus;
+    try {
+        await fetch(`/api/conversas/${conversaAtual.id}/kanban`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status: novoStatus})});
+        showToast(`Movido para ${novoStatus}`, 'info');
+        carregarConversas(); // recarrega lista se necessário
+    } catch(e) {}
 }
 
 // ===================== TAGS =====================
@@ -153,17 +189,22 @@ async function carregarConversas(showLoading = false) {
             const statusDot = c.status_bot 
                 ? `<div class="w-2.5 h-2.5 rounded-full bg-whatsapp shadow-[0_0_8px_rgba(37,211,102,0.6)]" title="Robô"></div>` 
                 : `<div class="w-2.5 h-2.5 rounded-full bg-slate-500" title="Humano"></div>`;
+                
+            const badgeUnread = c.unreadCount > 0 
+                ? `<div class="bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] rounded-full flex items-center justify-center px-1 shadow-lg">${c.unreadCount}</div>`
+                : '';
 
             div.innerHTML = `
-                <div class="h-10 w-10 bg-slate-700 rounded-full flex shrink-0 items-center justify-center text-slate-400">
+                <div class="h-10 w-10 bg-slate-700 rounded-full flex shrink-0 items-center justify-center text-slate-400 relative">
                     <i data-lucide="user" class="h-5 w-5"></i>
+                    ${badgeUnread ? `<div class="absolute -top-1 -right-1">${badgeUnread}</div>` : ''}
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex justify-between items-center mb-1">
-                        <span class="font-semibold text-slate-200 truncate text-sm">${c.nome || c.telefone}</span>
+                        <span class="font-semibold text-slate-200 truncate text-sm flex-1 mr-2">${c.nome || c.telefone}</span>
                         ${statusDot}
                     </div>
-                    <p class="text-xs text-slate-400 truncate mb-1">${c.ultima_mensagem || '...'}</p>
+                    <p class="text-xs ${c.unreadCount > 0 ? 'text-slate-200 font-semibold mb-1 truncate' : 'text-slate-400 mb-1 truncate'}">${c.ultima_mensagem || '...'}</p>
                     <div class="flex gap-1">${renderTags(c.tags)}</div>
                 </div>
             `;
@@ -182,6 +223,12 @@ async function abrirChat(conversa) {
     document.getElementById('chat-nome').innerText = conversa.nome;
     document.getElementById('chat-telefone').innerText = `+${conversa.telefone}`;
     document.getElementById('chat-tags-display').innerHTML = renderTags(conversa.tags);
+    document.getElementById('chat-kanban-status').value = conversa.status_kanban || 'Novos';
+    
+    // Sidebar Infos Update
+    document.getElementById('info-nome').innerText = conversa.nome;
+    document.getElementById('info-telefone').innerText = `+${conversa.telefone}`;
+    document.getElementById('followup-horas').value = conversa.lembrete_horas || '';
 
     renderBotBtn();
     await carregarMensagens();
@@ -248,13 +295,45 @@ async function carregarMensagens() {
     } catch(e) {}
 }
 
+// ===================== AUTOMATION =====================
+function toggleAgendar() {
+    const ipt = document.getElementById('input-agendar');
+    if(ipt.classList.contains('hidden')) {
+        ipt.classList.remove('hidden');
+    } else {
+        ipt.classList.add('hidden');
+        ipt.value = '';
+    }
+}
+
+async function salvarFollowUp() {
+    if(!conversaAtual) return;
+    const v = document.getElementById('followup-horas').value;
+    try {
+        await fetch(`/api/conversas/${conversaAtual.id}/followup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ horas: v }) });
+        showToast(v ? `Cobrança agendada para ${v}h` : 'Cobrança cancelada', 'info');
+        carregarConversas();
+    } catch(e) {}
+}
+
 async function enviarMsg() {
     const input = document.getElementById('input-msg');
+    const dateInput = document.getElementById('input-agendar');
     const texto = input.value.trim();
     if (!texto || !conversaAtual) return;
     input.value = '';
     fecharQuickReply();
     
+    if(dateInput && dateInput.value && !dateInput.classList.contains('hidden')) {
+         try {
+             await fetch(`/api/conversas/${conversaAtual.id}/agendar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, dataStr: dateInput.value }) });
+             showToast('Mensagem Agendada!', 'success');
+             dateInput.classList.add('hidden');
+             dateInput.value = '';
+         } catch(e) { showToast('Erro', 'error'); }
+         return;
+    }
+
     document.getElementById('chat-historico').innerHTML += `<div class="msg-bubble msg-shop text-white opacity-60"><span>${texto}</span></div>`;
     document.getElementById('chat-historico').scrollTop = document.getElementById('chat-historico').scrollHeight;
 
@@ -270,18 +349,11 @@ async function enviarMsg() {
 }
 
 // ===================== QUICK REPLIES =====================
-// Inicializar com algumas base
-const fallbackQR = [
-    { atalho: "/pix", texto: "Nossa chave PIX é o CNPJ: 12.345.678/0001-90 (FBS Camisetas). Envie o comprovante aqui assim que fizer! 😊" },
-    { atalho: "/prazo", texto: "O nosso prazo médio de produção para esse volume é de 7 a 10 dias úteis após a aprovação da arte." },
-    { atalho: "/arte", texto: "Você tem a arte pronta em vetor (PDF ou Corel) ou uma imagem em alta qualidade?" }
-];
-
 function checarQuickReply(val) {
     const popup = document.getElementById('quick-replies-popup');
     if(val === '/') {
         popup.classList.remove('hidden');
-        renderListaQuickReplies();
+        renderListaQuickReplies(true);
     } else if (!val.startsWith('/')) {
         fecharQuickReply();
     }
@@ -289,13 +361,36 @@ function checarQuickReply(val) {
 
 function fecharQuickReply() { document.getElementById('quick-replies-popup')?.classList.add('hidden'); }
 
-function renderListaQuickReplies() {
-    const l = document.getElementById('quick-replies-list');
+async function carregarQuickReplies() {
+    try {
+        const r = await fetch('/api/respostas');
+        respostasRapidas = await r.json();
+        // Fallbacks se db estiver zerado
+        if(respostasRapidas.length === 0) {
+            respostasRapidas = [
+                { atalho: "/pix", texto: "Nossa chave PIX é o CNPJ: 12.345.678/0001-90 (FBS Camisetas). Envie o comprovante aqui!" },
+                { atalho: "/prazo", texto: "O prazo médio de produção para esse volume é de 7 a 10 dias úteis." }
+            ];
+        }
+        renderListaQuickReplies(false);
+    } catch(e) {}
+}
+
+function renderListaQuickReplies(forPopup) {
+    const l = document.getElementById(forPopup ? 'quick-replies-list' : 'side-respostas-list');
+    if(!l) return;
     l.innerHTML = '';
-    fallbackQR.forEach(q => {
+    respostasRapidas.forEach(q => {
         const div = document.createElement('div');
-        div.className = 'p-2 hover:bg-slate-700 cursor-pointer rounded-md text-sm transition';
-        div.innerHTML = `<span class="font-bold text-primary mr-2">${q.atalho}</span><span class="text-slate-300 truncate">${q.texto.substring(0,30)}...</span>`;
+        div.className = forPopup ? 'p-2 hover:bg-slate-700 cursor-pointer rounded-md text-sm transition flex items-center justify-between' : 'p-3 hover:bg-slate-700 bg-navy-900 border border-slate-700 cursor-pointer rounded-lg text-sm transition';
+        if(forPopup) {
+             div.innerHTML = `<div><span class="font-bold text-primary mr-2">${q.atalho}</span><span class="text-slate-300 truncate">${q.texto.substring(0,30)}...</span></div>`;
+        } else {
+             div.innerHTML = `<div class="font-bold text-primary mb-1">${q.atalho}</div>
+                              <div class="text-slate-300 text-xs truncate break-words mb-2">${q.texto}</div>
+                              ${q.midiaUrl ? '<div class="text-[10px] text-amber-500 flex items-center gap-1"><i data-lucide="paperclip" class="h-3 w-3"></i> Mídia Anexada</div>' : ''}
+             `;
+        }
         div.onclick = () => {
             document.getElementById('input-msg').value = q.texto;
             fecharQuickReply();
@@ -303,6 +398,20 @@ function renderListaQuickReplies() {
         };
         l.appendChild(div);
     });
+    lucide.createIcons({root: l});
+}
+
+async function novaRespostaRapida() {
+    const atalho = prompt("Digite o Atalho. Ex: /boasvindas");
+    if(!atalho) return;
+    const texto = prompt("Digite o Texto da MENSAGEM:");
+    if(!texto) return;
+    
+    // Simplificacao: Cadastro padrao
+    try {
+        const r = await fetch('/api/respostas', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ atalho, texto }) });
+        if(r.ok) { showToast('Atalho criado!'); carregarQuickReplies(); }
+    } catch(e) {}
 }
 
 // ===================== UPLOAD ARQUIVO =====================
@@ -389,6 +498,45 @@ function renderPedidos(pedidos) {
     });
 }
 
+// ===================== DASHBOARD =====================
+let chartVolInstance = null;
+let chartKanbanInstance = null;
+
+async function carregarDashboard() {
+    try {
+        const res = await fetch('/api/dashboard/stats');
+        const data = await res.json();
+        
+        document.getElementById('dash-avg').innerText = data.avgResponse;
+        
+        let tl = 0;
+        const labelsK = Object.keys(data.kanbanDist);
+        const dataK = Object.values(data.kanbanDist);
+        dataK.forEach(v => tl += v);
+        document.getElementById('dash-total').innerText = tl;
+
+        const ctxKanban = document.getElementById('chart-kanban').getContext('2d');
+        if(chartKanbanInstance) chartKanbanInstance.destroy();
+        chartKanbanInstance = new Chart(ctxKanban, {
+            type: 'doughnut',
+            data: { labels: labelsK, datasets: [{ data: dataK, backgroundColor: ['#3b82f6','#eab308','#a855f7','#22c55e'] }]},
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#cbd5e1'} } } }
+        });
+
+        const labelsV = Object.keys(data.leadsPorDia).sort();
+        const dataV = labelsV.map(l => data.leadsPorDia[l]);
+        const ctxVol = document.getElementById('chart-volume').getContext('2d');
+        if(chartVolInstance) chartVolInstance.destroy();
+        chartVolInstance = new Chart(ctxVol, {
+            type: 'bar',
+            data: { labels: labelsV, datasets: [{ label: 'Novos Contatos', data: dataV, backgroundColor: '#3b82f6', borderRadius: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: {color: '#94a3b8'} }, y: { ticks: {color: '#94a3b8'} } }, plugins: { legend: { display: false } } }
+        });
+
+    } catch (e) {}
+}
+
+carregarQuickReplies();
 carregarConversas(true);
 setInterval(() => {
     carregarConversas(false);
