@@ -62,7 +62,7 @@ const gerarRespostaIA = async (conversaId, nomeCliente, novaPergunta) => {
         historico.push(...msgs.map(m => ({ role: m.origem === 'cliente' ? 'user' : 'model', parts: [{ text: m.texto }] })));
 
         
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
         const userMsg = historico.pop();
         
         const chat = model.startChat({ history: historico, generationConfig: { maxOutputTokens: 150, temperature: 0.7 }});
