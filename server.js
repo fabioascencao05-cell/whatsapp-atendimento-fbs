@@ -183,11 +183,10 @@ app.post('/api/webhook', async (req, res) => {
                 console.log('🔄 Bot religado automaticamente (10 min de silêncio humano)');
             }
         } else if (conversa.status_bot === false) {
-            // Nunca houve msg humana mas bot está desligado (ex: desligou após erro 429)
-            // Religa automaticamente para não travar pra sempre
-            await prisma.conversa.update({ where: { id: conversa.id }, data: { status_bot: true }});
-            conversa.status_bot = true;
-            console.log('🔄 Bot religado automaticamente (nenhuma msg humana encontrada)');
+            // Bot desligado manualmente pelo painel e sem mensagens humanas
+            // Respeitar a decisão manual — NÃO religar
+            silencio = true;
+            console.log('🛑 Bot desligado manualmente pelo painel (respeitando)');
         }
 
         // ========== ACIONAR IA ==========
