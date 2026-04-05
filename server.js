@@ -40,7 +40,7 @@ const enviarMensagemEvolution = async (number, text) => {
         const payload = {
             number: String(number),
             options: { delay: 1200 },
-            textMessage: { text: String(text) }
+            text: String(text)
         };
         
         console.log("📦 PAYLOAD PARA EVOLUTION:", JSON.stringify(payload));
