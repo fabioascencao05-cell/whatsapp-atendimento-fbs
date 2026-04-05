@@ -10,7 +10,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// Frontend estatico foi movido para o final do arquivo
 
 // Multer setup (in memory, for quick upload to API)
 const upload = multer({ storage: multer.memoryStorage() });
@@ -282,6 +282,9 @@ app.post('/api/conversas/:id/pedidos', async (req, res) => {
         res.json(pedido);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// Deixando regras de frontend ABAIXO exclusivas aqui:
+app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor na porta ${PORT}`));
