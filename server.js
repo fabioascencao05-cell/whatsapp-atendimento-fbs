@@ -299,30 +299,59 @@ app.post('/api/webhook', async (req, res) => {
                 return;
             }
             
-            console.log('🤖 Acionando IA para responder...');
+            console.log('🤖 Acionando IA para responder a:', msgText);
             let respostaIA = await gerarRespostaIA(conversa.id, pushName, msgText);
             
-            // RETRY: Se falhou (erro 429), espera 10 segundos e tenta UMA vez mais
+            // RETRY: Se falhou, espera 10 segundos e tenta UMA vez mais
             if (!respostaIA) {
-                console.log('⏳ Primeira tentativa falhou. Aguardando 10s para retry...');
+                console.log('⏳ Primeira tentativa IA falhou. Aguardando 10s para retry...');
                 await new Promise(r => setTimeout(r, 10000));
                 respostaIA = await gerarRespostaIA(conversa.id, pushName, msgText);
             }
             
             if(respostaIA) {
-                console.log('✅ Resposta da IA gerada, enviando via Evolution...');
+                console.log('✅ Resposta da IA:', respostaIA.substring(0, 100) + '...');
                 await enviarMensagemEvolution(number, respostaIA);
                 await prisma.mensagem.create({ data: { conversaId: conversa.id, texto: respostaIA, origem: 'bot' } });
+
+                // ========== DETECÇÃO DE ENCERRAMENTO ==========
+                // Se a Natália enviou mensagem de encerramento, pausar bot e avisar Fabio
+                const respostaLower = respostaIA.toLowerCase();
+                const palavrasEncerramento = [
+                    'responsável entra em contato',
+                    'responsável já está cuidando',
+                    'consultar a produção',
+                    'transferir pro nosso responsável',
+                    'foi um prazer te atender',
+                    'fabio já está cuidando',
+                    'nosso responsável'
+                ];
+                
+                const encerrou = palavrasEncerramento.some(p => respostaLower.includes(p));
+                
+                if (encerrou) {
+                    console.log('🏁 Natália ENCERROU o atendimento. Pausando bot e avisando Fabio...');
+                    await prisma.conversa.update({ where: { id: conversa.id }, data: { status_bot: false } });
+                    
+                    // Notificar Fabio
+                    const FABIO_NUMBER = '5511965706626';
+                    const notificacao = `🔔 *NOVO LEAD PRA ATENDER!*\n\n👤 Cliente: ${conversa.nome}\n📱 Número: ${conversa.telefone}\n💬 Última msg: "${msgText}"\n\n⚡ A Natália já coletou as infos. Abra o CRM pra assumir!`;
+                    await enviarMensagemEvolution(FABIO_NUMBER, notificacao);
+                    console.log('📲 Notificação enviada para Fabio!');
+                }
             } else {
                  console.log('❌ Resposta da IA falhou após retry. Enviando fallback...');
                  const fallbackTexto = "Oi! Aqui é a assistente da FBS. Estou com muita demanda agora, mas o Fabio já foi avisado e vai te atender pessoalmente no capricho em instantes!";
                  await enviarMensagemEvolution(number, fallbackTexto);
                  await prisma.mensagem.create({ data: { conversaId: conversa.id, texto: fallbackTexto, origem: 'bot' } });
-                 // NÃO desliga o bot, mantém ligado para a próxima mensagem tentar novamente
+                 
+                 // Avisar Fabio que o bot falhou
+                 const FABIO_NUMBER = '5511965706626';
+                 await enviarMensagemEvolution(FABIO_NUMBER, `⚠️ Bot falhou ao responder ${conversa.nome} (${conversa.telefone}). Verifique o CRM!`);
                  console.log('⚠️ Bot MANTIDO LIGADO para tentar novamente na próxima mensagem');
             }
         } else {
-            console.log('🛑 IA ignorada. Motivo:', { status_bot: conversa.status_bot, silencio_10m: silencio, contem_midia: !!mediaType });
+            console.log('📎 Mídia recebida, IA não acionada.');
         }
     } catch (err) { console.error('Erro DB webhook:', err); }
 });
