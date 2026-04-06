@@ -151,13 +151,13 @@ const gerarRespostaIA = async (conversaId, nomeCliente, novaPergunta) => {
             orderBy: { criado_em: 'desc' }, 
             take: 15 
         });
-        const msgs = msgsDB.reverse(); // Reverte para a ordem cronológica correta (antiga -> nova)
+        const msgs = msgsDB.reverse();
 
         const historico = [];
         historico.push({ role: 'user', parts: [{ text: SYSTEM_PROMPT }]});
         historico.push({ role: 'model', parts: [{ text: "Entendido! Sou a Natália da FBS Camisetas, pronta pra atender." }]});
 
-        // Consolidar mensagens sequenciais com a mesma role para não estourar erro 400 no Gemini
+        // Consolidar mensagens sequenciais com a mesma role
         for (const m of msgs) {
             const role = m.origem === 'cliente' ? 'user' : 'model';
             const texto = m.texto;
@@ -171,19 +171,44 @@ const gerarRespostaIA = async (conversaId, nomeCliente, novaPergunta) => {
             }
         }
         
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-        
-        // Remove a última mensagem que obrigatoriamente tem que ser 'user' (já que é o cliente quem trigou o webhook)
-        // Se por algum motivo o último for model, a IA fará uma continuação esquisita, mas sendMessage exige um texto livre a parte.
+        // Garantir que o último item é 'user'
         const msgFinal = historico.pop();
+        if (!msgFinal || msgFinal.role !== 'user') {
+            console.log('⚠️ Histórico inválido: último item não é user. Role:', msgFinal?.role);
+            // Se o último for model, adicionar a pergunta como user
+            if (msgFinal) historico.push(msgFinal);
+            const chatModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const chat = chatModel.startChat({ history: historico, generationConfig: { maxOutputTokens: 500, temperature: 0.5 }});
+            const result = await chat.sendMessage(novaPergunta);
+            return result.response.text();
+        }
         
-        const chat = model.startChat({ history: historico, generationConfig: { maxOutputTokens: 500, temperature: 0.5 }});
-        const result = await chat.sendMessage(msgFinal.parts[0].text);
+        // Tentar com gemini-2.5-flash primeiro
+        const modelos = ["gemini-2.5-flash", "gemini-2.0-flash"];
         
-        return result.response.text();
+        for (const modeloNome of modelos) {
+            try {
+                console.log(`🧠 Tentando modelo: ${modeloNome}...`);
+                const model = genAI.getGenerativeModel({ model: modeloNome });
+                const chat = model.startChat({ history: historico, generationConfig: { maxOutputTokens: 500, temperature: 0.5 }});
+                const result = await chat.sendMessage(msgFinal.parts[0].text);
+                const texto = result.response.text();
+                if (texto) {
+                    console.log(`✅ Modelo ${modeloNome} respondeu com sucesso!`);
+                    return texto;
+                }
+            } catch (modelErr) {
+                console.error(`❌ Modelo ${modeloNome} falhou:`, modelErr.message || modelErr);
+                // Continua para o próximo modelo
+            }
+        }
+        
+        console.error('❌ TODOS os modelos falharam!');
+        return null;
     } catch(err) {
-        console.error('Erro no processamento do Gemini:', err); 
-        return null; // Força cair no fallback para não ficar mudo
+        console.error('❌ Erro GERAL no Gemini:', err.message || err);
+        console.error('❌ Stack:', err.stack);
+        return null;
     }
 }
 
