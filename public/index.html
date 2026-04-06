@@ -1,265 +1,279 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FBS CRM | Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>FBS CRM | Camisetas Personalizadas</title>
+    <meta name="description" content="CRM de atendimento WhatsApp da FBS Camisetas">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: { colors: { navy: { 800: '#1e293b', 900: '#0f172a' }, primary: '#3b82f6', whatsapp: '#25D366' } }
-            }
-        }
-    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-navy-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
+<body style="height:100vh;display:flex;flex-direction:column;overflow:hidden;">
 
-    <!-- Top Navbar -->
-    <nav class="bg-navy-800 border-b border-slate-700 h-14 flex items-center justify-between px-6 shrink-0 shadow-sm z-20">
-        <div class="flex items-center gap-6">
-            <div class="flex items-center gap-2">
-                <i data-lucide="shirt" class="text-primary h-6 w-6"></i>
-                <h1 class="text-xl font-bold tracking-tight">FBS <span class="text-primary font-light">Camisetas</span></h1>
+    <!-- ========= NAVBAR ========= -->
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;">
+            <div class="logo">
+                <i data-lucide="shirt" style="color:var(--action);width:22px;height:22px;"></i>
+                <h1>FBS <span>Camisetas</span></h1>
             </div>
-            
-            <div class="flex gap-1 ml-4 border-l border-slate-700 pl-6 text-sm font-medium">
-                <button onclick="switchTab('chat')" id="tab-chat" class="px-4 py-1.5 rounded-md bg-slate-700 text-slate-100 transition">Atendimento</button>
-                <button onclick="switchTab('kanban')" id="tab-kanban" class="px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition flex items-center gap-2"><i data-lucide="trello" class="h-4 w-4"></i> Kanban</button>
-                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="px-4 py-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition flex items-center gap-2"><i data-lucide="pie-chart" class="h-4 w-4"></i> Dashboard</button>
+            <div class="nav-tabs">
+                <button onclick="switchTab('chat')" id="tab-chat" class="nav-tab active">
+                    <i data-lucide="message-circle" style="width:15px;height:15px;"></i> Atendimento
+                </button>
+                <button onclick="switchTab('kanban')" id="tab-kanban" class="nav-tab">
+                    <i data-lucide="layout-grid" style="width:15px;height:15px;"></i> Kanban
+                </button>
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="nav-tab">
+                    <i data-lucide="bar-chart-3" style="width:15px;height:15px;"></i> Dashboard
+                </button>
             </div>
         </div>
     </nav>
 
-    <!-- SECTION: CHAT (CRM Padrão) -->
-    <section id="sec-chat" class="flex flex-1 overflow-hidden">
-        <!-- COL 1: Sidebar -->
-        <aside class="w-[320px] bg-navy-800 border-r border-slate-700 flex flex-col shrink-0 relative">
-            <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-navy-800/50">
-                <h2 class="font-semibold text-slate-200">Conversas</h2>
-                <button onclick="carregarConversas(true)" class="p-1.5 hover:bg-slate-700 rounded-md transition"><i data-lucide="refresh-cw" class="h-4 w-4 text-slate-400"></i></button>
+    <!-- ========= SEÇÃO: CHAT ========= -->
+    <section id="sec-chat" style="display:flex;flex:1;overflow:hidden;">
+
+        <!-- COLUNA 1: Lista de Conversas -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>Conversas</h2>
+                <button onclick="carregarConversas(true)" class="btn-icon" style="padding:6px;" title="Atualizar">
+                    <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i>
+                </button>
             </div>
-            <div class="p-2 border-b border-slate-700">
-                <div class="relative">
-                    <i data-lucide="search" class="absolute left-3 top-2.5 h-4 w-4 text-slate-400"></i>
-                    <input type="text" placeholder="Buscar cliente..." class="w-full bg-slate-700/50 border border-slate-600 rounded-md pl-9 pr-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-primary">
-                </div>
+            <div class="sidebar-search" style="position:relative;">
+                <i data-lucide="search" class="search-icon" style="width:14px;height:14px;position:absolute;left:22px;top:50%;transform:translateY(-50%);color:var(--text-muted);z-index:1;"></i>
+                <input type="text" id="search-conversas" placeholder="Buscar cliente..." class="search-input" oninput="filtrarConversas(this.value)">
             </div>
-            <div class="flex-1 overflow-y-auto" id="lista-conversas"></div>
+            <div style="flex:1;overflow-y:auto;" id="lista-conversas"></div>
         </aside>
 
-        <!-- COL 2: Chat Box -->
-        <main class="flex-1 flex flex-col bg-[#0b101a] relative">
-            <div id="chat-empty" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 z-10 bg-[#0b101a]">
-                <i data-lucide="message-square" class="h-16 w-16 mb-4 opacity-20"></i>
-                <p>Selecione uma conversa para iniciar.</p>
+        <!-- COLUNA 2: Chat -->
+        <main class="chat-area">
+            <!-- Empty State -->
+            <div id="chat-empty" class="empty-state">
+                <i data-lucide="message-square" style="width:56px;height:56px;"></i>
+                <p style="font-size:15px;">Selecione uma conversa para iniciar</p>
             </div>
 
-            <div id="chat-active" class="flex-1 flex flex-col hidden h-full">
+            <!-- Active Chat -->
+            <div id="chat-active" class="hidden" style="flex:1;display:flex;flex-direction:column;height:100%;">
                 <!-- Header -->
-                <header class="h-16 bg-navy-800 border-b border-slate-700 flex items-center justify-between px-6 shrink-0">
-                    <div class="flex items-center gap-3">
-                        <div class="h-10 w-10 bg-slate-700 rounded-full flex items-center justify-center">
-                            <i data-lucide="user" class="h-5 w-5 text-slate-400"></i>
+                <header class="chat-header">
+                    <div class="chat-header-left">
+                        <div class="avatar">
+                            <i data-lucide="user" style="width:18px;height:18px;color:var(--text-muted);"></i>
                         </div>
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <h2 id="chat-nome" class="font-semibold text-slate-100 leading-tight">Nome</h2>
-                                <span id="chat-tags-display" class="flex gap-1"></span>
-                                <button onclick="abrirModalTags()" class="text-slate-500 hover:text-slate-300 ml-1"><i data-lucide="tag" class="h-3 w-3"></i></button>
-                            </div>
-                            <span id="chat-telefone" class="text-xs text-slate-400">+55</span>
+                        <div class="info">
+                            <h2>
+                                <span id="chat-nome">Nome</span>
+                                <span id="chat-tags-display"></span>
+                                <button onclick="abrirModalTags()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:2px;" title="Editar Tags">
+                                    <i data-lucide="tag" style="width:12px;height:12px;"></i>
+                                </button>
+                            </h2>
+                            <span id="chat-telefone">+55</span>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <select id="chat-kanban-status" onchange="alterarKanbanAtivo(this.value)" class="bg-slate-700 text-xs rounded border border-slate-600 px-2 py-1 text-slate-200 focus:outline-none focus:border-primary">
-                            <option value="Novos">Novos</option>
-                            <option value="Em Orçamento">Em Orçamento</option>
-                            <option value="Aguardando Arte/Aprovação">Aguardando Arte</option>
-                            <option value="Em Produção">Em Produção</option>
-                            <option value="Finalizado">Finalizado</option>
+                    <div class="chat-header-right">
+                        <select id="chat-kanban-status" onchange="alterarKanbanAtivo(this.value)" class="kanban-select">
+                            <option value="Novos">🔵 Novos</option>
+                            <option value="Em Orçamento">🟡 Em Orçamento</option>
+                            <option value="Em Negociação">🟡 Em Negociação</option>
+                            <option value="Aguardando Arte/Aprovação">🟠 Aguardando Arte</option>
+                            <option value="Em Produção">🔵 Em Produção</option>
+                            <option value="Finalizado">🟢 Finalizado</option>
                         </select>
-                        <button id="btn-robo" onclick="alternarRobo()" class="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20 transition text-sm font-medium">
-                            <i data-lucide="bot" class="h-4 w-4"></i> Pausar Robô
+                        <!-- BOT BUTTON — PRESERVED EXACTLY AS IS -->
+                        <button id="btn-robo" onclick="alternarRobo()" class="btn-bot-pause">
+                            <i data-lucide="bot" style="width:14px;height:14px;"></i> Pausar Bot
                         </button>
-                        <button onclick="excluirConversa()" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-md transition" title="Excluir Conversa">
-                            <i data-lucide="trash-2" class="h-4 w-4"></i>
+                        <button onclick="excluirConversa()" class="btn-delete" title="Excluir Conversa">
+                            <i data-lucide="trash-2" style="width:15px;height:15px;"></i>
                         </button>
                     </div>
                 </header>
 
                 <!-- Messages -->
-                <div id="chat-historico" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 chat-bg relative">
-                     <!-- Pop-up de Quick Replies Flutuante -->
-                    <div id="quick-replies-popup" class="hidden absolute bottom-2 left-4 bg-navy-800 border border-slate-600 rounded-lg shadow-xl p-2 w-64 z-30">
-                        <div class="text-xs text-slate-400 mb-2 font-medium px-2">Cadeia Rápida</div>
-                        <div id="quick-replies-list" class="flex flex-col gap-1 max-h-48 overflow-y-auto"></div>
+                <div id="chat-historico" class="chat-bg" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:6px;position:relative;">
+                    <div id="quick-replies-popup" class="qr-popup hidden">
+                        <div style="font-size:11px;color:var(--text-muted);padding:4px 8px;font-weight:600;margin-bottom:4px;">Respostas Rápidas</div>
+                        <div id="quick-replies-list"></div>
                     </div>
                 </div>
 
                 <!-- Input Zone -->
-                <div class="p-4 bg-navy-800 border-t border-slate-700 shrink-0 relative">
-                    <!-- Upload Input Hidden -->
+                <div class="chat-input-area">
                     <input type="file" id="file-uploader" class="hidden" onchange="uploadArquivo()">
-                    
-                    <div class="flex gap-2 items-center">
-                        <button onclick="document.getElementById('file-uploader').click()" class="p-3 text-slate-400 hover:text-slate-200 transition bg-slate-700/50 rounded-lg" title="Anexar Arquivo"><i data-lucide="paperclip" class="h-5 w-5"></i></button>
-                        <div class="relative items-center flex">
-                             <input type="datetime-local" id="input-agendar" class="hidden absolute bottom-12 left-0 bg-navy-800 border border-slate-600 rounded-lg p-2 text-sm text-slate-200 w-48 shadow-lg">
-                             <button onclick="toggleAgendar()" class="p-3 text-amber-500 hover:text-amber-400 transition bg-slate-700/50 rounded-lg ml-1" title="Agendar Mensagem"><i data-lucide="clock" class="h-5 w-5"></i></button>
+                    <div class="chat-input-row">
+                        <button onclick="document.getElementById('file-uploader').click()" class="btn-icon" title="Anexar Arquivo">
+                            <i data-lucide="paperclip" style="width:18px;height:18px;"></i>
+                        </button>
+                        <div style="position:relative;display:flex;align-items:center;">
+                            <input type="datetime-local" id="input-agendar" class="hidden" style="position:absolute;bottom:48px;left:0;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;font-size:13px;color:var(--text-primary);width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:20;">
+                            <button onclick="toggleAgendar()" class="btn-icon" title="Agendar Mensagem" style="color:var(--warning);">
+                                <i data-lucide="clock" style="width:18px;height:18px;"></i>
+                            </button>
                         </div>
-                        <input type="text" id="input-msg" oninput="checarQuickReply(this.value)" class="flex-1 bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-primary placeholder-slate-400" placeholder="Digite uma mensagem (Use / para respostas rápidas)..." onkeypress="if(event.key==='Enter') enviarMsg()">
-                        <button onclick="enviarMsg()" class="px-5 py-3 bg-primary hover:bg-blue-600 transition text-white rounded-lg flex items-center gap-2 font-medium shadow-md shadow-blue-500/20">
-                            Enviar <i data-lucide="send" class="h-4 w-4"></i>
+                        <input type="text" id="input-msg" oninput="checarQuickReply(this.value)" class="chat-input" placeholder="Digite uma mensagem... (Use / para respostas rápidas)" onkeypress="if(event.key==='Enter') enviarMsg()">
+                        <button onclick="enviarMsg()" class="btn-send">
+                            <i data-lucide="send" style="width:16px;height:16px;"></i> Enviar
                         </button>
                     </div>
                 </div>
             </div>
         </main>
 
-        <!-- COL 3: ERP & INFO (Right Sidebar Retrátil) -->
-        <aside id="erp-area" class="w-[360px] bg-navy-800 border-l border-slate-700 flex flex-col shrink-0 hidden transition-all duration-300">
-            <div class="flex justify-between items-center bg-navy-900 border-b border-slate-700">
-                <button onclick="toggleRightTab('info')" id="btn-tab-info" class="flex-1 py-3 text-sm font-semibold text-primary border-b-2 border-primary bg-navy-800">Cadastro & Infos</button>
-                <button onclick="toggleRightTab('erp')" id="btn-tab-erp" class="flex-1 py-3 text-sm font-semibold text-slate-400 border-b-2 border-transparent">ERP Vendas</button>
-            </div>
-            
-            <!-- ABA INFO / RESPOSTAS RÁPIDAS -->
-            <div id="right-tab-info" class="flex-1 flex flex-col overflow-hidden">
-                 <div class="p-5 border-b border-slate-700 flex items-center gap-4 bg-navy-800/50">
-                     <div class="h-14 w-14 rounded-full bg-slate-700 flex items-center justify-center shrink-0">
-                         <i data-lucide="user" class="h-7 w-7 text-slate-400"></i>
-                     </div>
-                     <div class="min-w-0">
-                         <h2 id="info-nome" class="font-bold text-slate-100 text-lg truncate">Cliente</h2>
-                         <p id="info-telefone" class="text-slate-400 text-sm truncate">+55</p>
-                     </div>
-                 </div>
-                 <div class="p-4 border-b border-slate-700">
-                     <p class="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wider">Ações Automáticas</p>
-                     <div class="flex gap-2">
-                          <select id="followup-horas" class="bg-slate-700 text-xs rounded border border-slate-600 px-2 py-2 text-slate-200 focus:outline-none focus:border-primary flex-1">
-                               <option value="">Sem Lembrete</option><option value="2">Lembra em 2 horas</option><option value="24">Lembrar amanhã (24h)</option>
-                          </select>
-                          <button onclick="salvarFollowUp()" class="bg-primary/20 text-primary border border-primary/30 px-3 rounded hover:bg-primary/30 transition text-xs font-bold">Cobrar</button>
-                     </div>
-                 </div>
-                 <div class="flex-1 overflow-y-auto p-4 kanban-board">
-                     <div class="flex justify-between items-end mb-3 mt-1">
-                         <p class="text-xs text-slate-400 font-medium uppercase tracking-wider">Respostas Rápidas</p>
-                         <button onclick="novaRespostaRapida()" class="text-primary hover:text-blue-400 text-xs flex items-center gap-1"><i data-lucide="plus" class="h-3 w-3"></i> Adicionar</button>
-                     </div>
-                     <div id="side-respostas-list" class="flex flex-col gap-2"></div>
-                 </div>
+        <!-- COLUNA 3: Painel do Cliente -->
+        <aside id="erp-area" class="right-panel hidden">
+            <div class="right-tabs">
+                <button onclick="toggleRightTab('info')" id="btn-tab-info" class="right-tab active">Cadastro</button>
+                <button onclick="toggleRightTab('erp')" id="btn-tab-erp" class="right-tab">Pedidos</button>
             </div>
 
-            <!-- ABA ERP -->
-            <div id="right-tab-erp" class="flex-1 overflow-y-auto p-5 hidden">
-                <div class="bg-navy-900 border border-slate-700 rounded-lg p-4 mb-6 shadow-lg">
-                    <h3 class="text-sm font-semibold text-slate-300 mb-3 border-b border-slate-700 pb-2">Novo Pedido</h3>
-                    <div class="grid grid-cols-2 gap-2 mb-3">
-                        <div><label class="text-xs text-slate-400 mb-1 block">Qtd</label><input type="number" id="ped-qtd" class="erp-input w-full" value="1"></div>
+            <!-- ABA INFOS -->
+            <div id="right-tab-info" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+                <div style="padding:20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;">
+                    <div style="width:56px;height:56px;border-radius:50%;background:var(--bg-card);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i data-lucide="user" style="width:24px;height:24px;color:var(--text-muted);"></i>
+                    </div>
+                    <div style="min-width:0;">
+                        <h2 id="info-nome" style="font-size:16px;font-weight:700;">Cliente</h2>
+                        <p id="info-telefone" style="font-size:13px;color:var(--text-muted);cursor:pointer;" onclick="navigator.clipboard.writeText(this.innerText);showToast('Telefone copiado!','info');" title="Clique para copiar">+55</p>
+                    </div>
+                </div>
+                <div style="padding:16px;border-bottom:1px solid var(--border);">
+                    <p style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Automação</p>
+                    <div style="display:flex;gap:8px;">
+                        <select id="followup-horas" class="erp-input" style="flex:1;">
+                            <option value="">Sem Lembrete</option>
+                            <option value="1">1 hora</option>
+                            <option value="2">2 horas</option>
+                            <option value="24">Amanhã (24h)</option>
+                        </select>
+                        <button onclick="salvarFollowUp()" class="btn-primary" style="font-size:12px;">Cobrar</button>
+                    </div>
+                </div>
+                <div style="flex:1;overflow-y:auto;padding:16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <p style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Respostas Rápidas</p>
+                        <button onclick="novaRespostaRapida()" style="background:none;border:none;color:var(--action);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px;">
+                            <i data-lucide="plus" style="width:12px;height:12px;"></i> Adicionar
+                        </button>
+                    </div>
+                    <div id="side-respostas-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+                </div>
+            </div>
+
+            <!-- ABA PEDIDOS -->
+            <div id="right-tab-erp" class="hidden" style="flex:1;overflow-y:auto;padding:20px;">
+                <div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:20px;">
+                    <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">Novo Pedido</h3>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Qtd</label><input type="number" id="ped-qtd" class="erp-input" style="width:100%;" value="1"></div>
                         <div>
-                            <label class="text-xs text-slate-400 mb-1 block">Tamanho</label>
-                            <select id="ped-tamanho" class="erp-input w-full"><option>P</option><option>M</option><option>G</option><option>GG</option><option>XG</option></select>
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Tamanho</label>
+                            <select id="ped-tamanho" class="erp-input" style="width:100%;"><option>P</option><option>M</option><option>G</option><option>GG</option><option>XG</option></select>
                         </div>
                     </div>
-                    <div class="mb-3"><label class="text-xs text-slate-400 mb-1 block">Cor da Camiseta</label><input type="text" id="ped-cor" class="erp-input w-full"></div>
-                    <div class="mb-3"><label class="text-xs text-slate-400 mb-1 block">Estampa</label><input type="text" id="ped-estampa" class="erp-input w-full"></div>
-                    <div class="mb-3">
-                        <label class="text-xs text-slate-400 mb-1 block">Status Interno</label>
-                        <select id="ped-status" class="erp-input w-full">
-                            <option value="Pendente">🟡 Pendente (Orçamento)</option>
+                    <div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Cor</label><input type="text" id="ped-cor" class="erp-input" style="width:100%;"></div>
+                    <div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Estampa</label><input type="text" id="ped-estampa" class="erp-input" style="width:100%;"></div>
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Status</label>
+                        <select id="ped-status" class="erp-input" style="width:100%;">
+                            <option value="Pendente">🟡 Pendente</option>
                             <option value="Em Produção">🔵 Em Produção</option>
-                            <option value="Pronto">🟢 Pronto na Loja</option>
+                            <option value="Pronto">🟢 Pronto</option>
                             <option value="Finalizado">✅ Finalizado</option>
                         </select>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mb-4 pt-3 border-t border-slate-700">
-                        <div><label class="text-xs text-slate-400 mb-1 block">Valor Deste Item</label><input type="number" id="ped-valor" class="erp-input w-full text-green-400 font-semibold" placeholder="R$ 0"></div>
-                        <div><label class="text-xs text-slate-400 mb-1 block">Sinal Pago</label><input type="number" id="ped-sinal" class="erp-input w-full text-blue-400" placeholder="R$ 0" value="0"></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;padding-top:8px;border-top:1px solid var(--border);">
+                        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Valor</label><input type="number" id="ped-valor" class="erp-input" style="width:100%;color:var(--success);" placeholder="R$ 0"></div>
+                        <div><label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Sinal</label><input type="number" id="ped-sinal" class="erp-input" style="width:100%;" placeholder="R$ 0" value="0"></div>
                     </div>
-                    <button onclick="salvarPedido()" class="w-full bg-green-600 hover:bg-green-500 text-white font-medium py-2 px-4 rounded-md transition flex justify-center items-center gap-2"><i data-lucide="check" class="h-4 w-4"></i> Salvar Pedido</button>
+                    <button onclick="salvarPedido()" class="btn-success" style="width:100%;">
+                        <i data-lucide="check" style="width:14px;height:14px;"></i> Salvar Pedido
+                    </button>
                 </div>
-                <div>
-                    <h3 class="text-sm font-semibold text-slate-300 mb-3 px-1">Pedidos</h3>
-                    <div id="lista-pedidos" class="flex flex-col gap-3"></div>
-                </div>
+                <h3 style="font-size:14px;font-weight:600;margin-bottom:12px;">Pedidos</h3>
+                <div id="lista-pedidos" style="display:flex;flex-direction:column;gap:8px;"></div>
             </div>
         </aside>
     </section>
 
-    <!-- SECTION: KANBAN -->
-    <section id="sec-kanban" class="hidden flex-1 flex-col overflow-hidden bg-navy-900 p-6">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-xl font-semibold flex items-center gap-2"><i data-lucide="trello" class="h-5 w-5 text-primary"></i> Funil de Atendimento (Kanban)</h2>
+    <!-- ========= SEÇÃO: KANBAN ========= -->
+    <section id="sec-kanban" class="hidden" style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg-primary);padding:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h2 style="font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px;">
+                <i data-lucide="layout-grid" style="width:18px;height:18px;color:var(--action);"></i> Funil de Atendimento
+            </h2>
         </div>
-        
-        <div class="flex-1 flex gap-4 overflow-x-auto pb-4 kanban-board" id="kanban-container">
-            <!-- Renderizado Pelo JS -->
+        <div style="flex:1;overflow-x:auto;padding-bottom:12px;" id="kanban-container" class="kanban-board"></div>
+    </section>
+
+    <!-- ========= SEÇÃO: DASHBOARD ========= -->
+    <section id="sec-dashboard" class="hidden" style="flex:1;display:flex;flex-direction:column;overflow:auto;background:var(--bg-primary);padding:32px;">
+        <div style="max-width:1100px;width:100%;margin:0 auto;">
+            <h2 style="font-size:20px;font-weight:700;margin-bottom:24px;display:flex;align-items:center;gap:10px;">
+                <i data-lucide="bar-chart-3" style="width:20px;height:20px;color:var(--action);"></i> Visão Operacional
+            </h2>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+                <div class="dash-card">
+                    <p class="label">Velocidade Média da IA</p>
+                    <h3 id="dash-avg" class="value">--</h3>
+                </div>
+                <div class="dash-card">
+                    <p class="label">Total de Leads Ativos</p>
+                    <h3 id="dash-total" class="value" style="color:var(--action);">--</h3>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div class="dash-card">
+                    <h4 style="font-size:15px;font-weight:600;margin-bottom:16px;">Volume (7 dias)</h4>
+                    <div style="height:220px;position:relative;"><canvas id="chart-volume"></canvas></div>
+                </div>
+                <div class="dash-card">
+                    <h4 style="font-size:15px;font-weight:600;margin-bottom:16px;">Funil (Kanban)</h4>
+                    <div style="height:220px;position:relative;display:flex;justify-content:center;"><canvas id="chart-kanban"></canvas></div>
+                </div>
+            </div>
         </div>
     </section>
 
-    <!-- SECTION: DASHBOARD -->
-    <section id="sec-dashboard" class="hidden flex-1 flex-col overflow-auto bg-navy-900 p-8">
-        <div class="max-w-6xl w-full mx-auto">
-            <h2 class="text-2xl font-bold mb-8 flex items-center gap-3"><i data-lucide="pie-chart" class="h-6 w-6 text-primary"></i> Visão Operacional</h2>
-            
-            <div class="grid grid-cols-3 gap-6 mb-8">
-                <div class="bg-navy-800 border border-slate-700 p-6 rounded-xl shadow-lg">
-                    <p class="text-slate-400 text-sm font-medium mb-1">Velocidade Média da IA</p>
-                    <h3 id="dash-avg" class="text-3xl font-bold text-slate-100">--</h3>
-                </div>
-                <div class="bg-navy-800 border border-slate-700 p-6 rounded-xl shadow-lg">
-                    <p class="text-slate-400 text-sm font-medium mb-1">Total de Leads Ativos</p>
-                    <h3 id="dash-total" class="text-3xl font-bold text-primary">--</h3>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-8">
-                <div class="bg-navy-800 border border-slate-700 p-6 rounded-xl shadow-lg">
-                    <h4 class="text-lg font-semibold mb-4 text-slate-200">Volume de Mensagens (7 dias)</h4>
-                    <div class="h-64 relative"><canvas id="chart-volume"></canvas></div>
-                </div>
-                <div class="bg-navy-800 border border-slate-700 p-6 rounded-xl shadow-lg">
-                    <h4 class="text-lg font-semibold mb-4 text-slate-200">Distribuição no Funil (Kanban)</h4>
-                    <div class="h-64 relative flex justify-center"><canvas id="chart-kanban"></canvas></div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Modal Tags -->
-    <div id="modal-tags" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
-        <div class="bg-navy-800 border border-slate-700 p-6 rounded-lg w-96 shadow-2xl">
-            <h3 class="font-bold text-lg mb-4">Adicionar Etiqueta (Tags)</h3>
-            <p class="text-xs text-slate-400 mb-4">Separe por vírgula. Ex: Urgente,Varejo,Atacado</p>
-            <input type="text" id="input-tags" class="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-4">
-            <div class="flex justify-end gap-2">
-                <button onclick="fecharModalTags()" class="px-4 py-2 hover:bg-slate-700 rounded transition">Cancelar</button>
-                <button onclick="salvarTags()" class="px-4 py-2 bg-primary text-white rounded transition hover:bg-blue-600">Salvar</button>
+    <!-- ========= MODAL: TAGS ========= -->
+    <div id="modal-tags" class="modal-overlay">
+        <div class="modal-box" style="width:380px;">
+            <h3 style="font-weight:700;font-size:16px;margin-bottom:12px;">Editar Tags</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Separe por vírgula. Ex: Urgente, Atacado, Varejo</p>
+            <input type="text" id="input-tags" class="erp-input" style="width:100%;margin-bottom:16px;">
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+                <button onclick="fecharModalTags()" class="btn-ghost">Cancelar</button>
+                <button onclick="salvarTags()" class="btn-primary">Salvar</button>
             </div>
         </div>
     </div>
 
-    <!-- Upload Progress Modal -->
-    <div id="modal-upload" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-50">
-        <div class="bg-navy-800 border border-slate-700 p-6 rounded-lg w-72 shadow-2xl flex flex-col items-center">
-            <i data-lucide="loader" class="h-8 w-8 text-primary animate-spin mb-4"></i>
-            <h3 class="font-bold">Enviando Arquivo...</h3>
-            <p class="text-xs text-slate-400 mt-1">Aguarde, mandando pela Evolution.</p>
+    <!-- ========= MODAL: UPLOAD ========= -->
+    <div id="modal-upload" class="modal-overlay">
+        <div class="modal-box" style="width:280px;display:flex;flex-direction:column;align-items:center;">
+            <i data-lucide="loader" style="width:32px;height:32px;color:var(--action);margin-bottom:12px;" class="animate-spin"></i>
+            <h3 style="font-weight:700;">Enviando Arquivo...</h3>
+            <p style="font-size:12px;color:var(--text-muted);margin-top:4px;">Aguarde.</p>
         </div>
     </div>
 
-    <!-- Toasts -->
-    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+    <!-- ========= TOASTS ========= -->
+    <div id="toast-container" style="position:fixed;bottom:16px;right:16px;z-index:50;display:flex;flex-direction:column;gap:8px;pointer-events:none;"></div>
 
     <script src="app.js"></script>
-    <script> lucide.createIcons(); </script>
+    <script>lucide.createIcons();</script>
+
+    <style>
+        .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
 </body>
 </html>
