@@ -670,5 +670,10 @@ setInterval(async () => {
 // Deixando regras de frontend ABAIXO exclusivas aqui:
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Fallback para SPA (React Router)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor na porta ${PORT}`));
