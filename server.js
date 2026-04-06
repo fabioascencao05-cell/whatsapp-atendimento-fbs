@@ -117,6 +117,9 @@ const estaEmHorarioComercial = () => {
     return hora >= 8 && hora < 20 && diaSemana !== 0;
 };
 
+// Rastrear mensagens enviadas pelo sistema para não confundir com Fabio no webhook
+const recentSystemMessages = new Map(); // telefone -> timestamp
+
 const enviarMensagemEvolution = async (number, text) => {
     try {
         if (!text) throw new Error("Texto vazio bloqueado antes do envio.");
@@ -131,6 +134,8 @@ const enviarMensagemEvolution = async (number, text) => {
         console.log("📦 PAYLOAD PARA EVOLUTION:", JSON.stringify(payload));
         
         await axios.post(url, payload, { headers: { 'apikey': process.env.EVOLUTION_API_KEY } });
+        // Registrar que o SISTEMA enviou esta mensagem (para não pausar o bot no webhook)
+        recentSystemMessages.set(String(number), Date.now());
         return true;
     } catch (error) {
         console.error("❌ MOTIVO DA REJEIÇÃO:", JSON.stringify(error.response?.data || error.message));
@@ -202,15 +207,25 @@ app.post('/api/webhook', async (req, res) => {
     const fromMe = messageData.key.fromMe;
     if (remoteJid.includes('@g.us')) return; // Ignora grupos
 
-    // Se a mensagem é do próprio Fabio respondendo pelo WhatsApp, pausar o bot nessa conversa
+    // Se a mensagem é fromMe, verificar se foi o SISTEMA ou o FABIO
     if (fromMe) {
+        const number = remoteJid.split('@')[0];
+        const lastSystemSend = recentSystemMessages.get(number);
+        
+        // Se o sistema enviou uma mensagem para este número nos últimos 15 segundos, ignorar
+        if (lastSystemSend && Date.now() - lastSystemSend < 15000) {
+            console.log('✅ fromMe ignorado — mensagem enviada pelo próprio sistema para:', number);
+            return;
+        }
+        
+        // Caso contrário, é o Fabio respondendo pelo WhatsApp — pausar o bot
         try {
             const conversaExiste = await prisma.conversa.findUnique({ where: { id: remoteJid } });
             if (conversaExiste && conversaExiste.status_bot === true) {
                 await prisma.conversa.update({ where: { id: remoteJid }, data: { status_bot: false } });
-                console.log('⏸️ Bot PAUSADO automaticamente — Fabio respondeu pelo WhatsApp em:', remoteJid);
+                console.log('⏸️ Bot PAUSADO — Fabio respondeu pelo WhatsApp em:', remoteJid);
             }
-        } catch(e) { /* conversa pode não existir ainda */ }
+        } catch(e) {}
         return;
     }
 
