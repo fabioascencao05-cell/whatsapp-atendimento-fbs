@@ -402,16 +402,20 @@ app.get('/api/conversas', async (req, res) => {
 });
 
 app.get('/api/conversas/:id', async (req, res) => {
-    // Zera o badge quando abre a conversa
-    await prisma.conversa.update({ where: { id: req.params.id }, data: { unreadCount: 0 } });
-    const mensagens = await prisma.mensagem.findMany({ where: { conversaId: req.params.id }, orderBy: { criado_em: 'asc' } });
-    const pedidos = await prisma.pedido.findMany({ where: { conversaId: req.params.id }, orderBy: { criado_em: 'desc' } });
-    res.json({ mensagens, pedidos });
+    try {
+        // Zera o badge quando abre a conversa
+        const conversa = await prisma.conversa.update({ where: { id: req.params.id }, data: { unreadCount: 0 } });
+        const mensagens = await prisma.mensagem.findMany({ where: { conversaId: req.params.id }, orderBy: { criado_em: 'asc' } });
+        const pedidos = await prisma.pedido.findMany({ where: { conversaId: req.params.id }, orderBy: { criado_em: 'desc' } });
+        res.json({ conversa, mensagens, pedidos });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/conversas/:id/pausar', async (req, res) => {
-    await prisma.conversa.update({ where: { id: req.params.id }, data: { status_bot: false } });
-    res.json({ success: true });
+    try {
+        await prisma.conversa.update({ where: { id: req.params.id }, data: { status_bot: false } });
+        res.json({ ok: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/conversas/:id/ativar', async (req, res) => {
@@ -424,7 +428,7 @@ app.post('/api/conversas/:id/ativar', async (req, res) => {
         await prisma.mensagem.create({ data: { conversaId: conversa.id, texto: msgRetomada, origem: 'bot' } });
         
         console.log('🤖 Bot ATIVADO e enviou mensagem de retomada para:', conversa.telefone);
-        res.json({ success: true });
+        res.json({ ok: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -464,14 +468,14 @@ app.post('/api/conversas/:id/enviar', async (req, res) => {
         const enviado = await enviarMensagemEvolution(conversa.telefone, textoFinal);
         if (enviado) {
             const origemStr = isQuickReply ? 'bot' : 'loja';
-            await prisma.mensagem.create({ data: { conversaId: conversa.id, texto: textoFinal, origem: origemStr } });
+            const novaMensagem = await prisma.mensagem.create({ data: { conversaId: conversa.id, texto: textoFinal, origem: origemStr } });
             
             if (!isQuickReply) {
                 await prisma.conversa.update({ where: { id: req.params.id }, data: { status_bot: false, ultima_mensagem: textoFinal, atualizado_em: new Date() } });
             } else {
                 await prisma.conversa.update({ where: { id: req.params.id }, data: { ultima_mensagem: textoFinal, atualizado_em: new Date() } });
             }
-            res.json({ success: true });
+            res.json(novaMensagem);
         } else { res.status(500).json({ error: 'Falha API' }); }
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
