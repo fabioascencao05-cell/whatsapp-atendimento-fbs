@@ -233,18 +233,21 @@ app.post('/api/webhook', async (req, res) => {
     const fromMe = messageData.key.fromMe;
     if (remoteJid.includes('@g.us')) return; // Ignora grupos
 
+    let origemMsg = 'cliente';
+
     // Se a mensagem é fromMe, verificar se foi o SISTEMA ou o FABIO
     if (fromMe) {
         const number = remoteJid.split('@')[0];
         const lastSystemSend = recentSystemMessages.get(number);
         
-        // Se o sistema enviou uma mensagem para este número nos últimos 15 segundos, ignorar
+        // Se o sistema enviou uma mensagem para este número nos últimos 15 segundos, ignorar COMPLETAMENTE
         if (lastSystemSend && Date.now() - lastSystemSend < 15000) {
             console.log('✅ fromMe ignorado — mensagem enviada pelo próprio sistema para:', number);
             return;
         }
         
-        // Caso contrário, é o Fabio respondendo pelo WhatsApp — pausar o bot
+        // Caso contrário, é o Fabio respondendo pelo WhatsApp — marcar origem como loja e pausar o bot
+        origemMsg = 'loja';
         try {
             const conversaExiste = await prisma.conversa.findUnique({ where: { id: remoteJid } });
             if (conversaExiste && conversaExiste.status_bot === true) {
@@ -252,7 +255,6 @@ app.post('/api/webhook', async (req, res) => {
                 console.log('⏸️ Bot PAUSADO — Fabio respondeu pelo WhatsApp em:', remoteJid);
             }
         } catch(e) {}
-        return;
     }
 
     const pushName = messageData.pushName || 'Desconhecido';
@@ -283,6 +285,9 @@ app.post('/api/webhook', async (req, res) => {
         msgText = messageObj.documentMessage.fileName || '📄 Documento Recebido';
         mediaType = 'document';
         mediaUrl = messageObj.documentMessage.url || 'document_received';
+    } else if (messageObj?.protocolMessage?.type === 0) {
+         // Mensagem deletada ou protocolo
+         return;
     } else {
          msgText = '📎 [Mídia/Outro Formato]';
     }
@@ -297,7 +302,7 @@ app.post('/api/webhook', async (req, res) => {
                 profile_pic_url: profilePic,
                 ultima_mensagem: msgText, 
                 atualizado_em: new Date(), 
-                unreadCount: { increment: 1 } 
+                unreadCount: origemMsg === 'cliente' ? { increment: 1 } : 0 
             },
             create: { 
                 id: remoteJid, 
@@ -307,13 +312,17 @@ app.post('/api/webhook', async (req, res) => {
                 ultima_mensagem: msgText, 
                 status_bot: true, 
                 status_kanban: "Novos", 
-                unreadCount: 1 
+                unreadCount: origemMsg === 'cliente' ? 1 : 0 
             }
         });
 
         await prisma.mensagem.create({
-            data: { conversaId: conversa.id, texto: msgText, mediaUrl: mediaUrl, mediaType: mediaType, origem: 'cliente' }
+            data: { conversaId: conversa.id, texto: msgText, mediaUrl: mediaUrl, mediaType: mediaType, origem: origemMsg }
         });
+
+        // Se a mensagem for 'loja' (manual), não processamos robô
+        if (origemMsg === 'loja') return;
+
 
         // ========== AUTO-CLASSIFICAÇÃO ==========
         const totalMsgsCliente = await prisma.mensagem.count({ where: { conversaId: conversa.id, origem: 'cliente' } });
