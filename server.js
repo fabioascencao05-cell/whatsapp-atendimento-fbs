@@ -17,7 +17,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const upload = multer({ storage: multer.memoryStorage() });
 
 const prisma = new PrismaClient();
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'no_key');
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyCX7HR6JjtJaRVC9tjWST17aHK867EkUMQ');
 
 const SYSTEM_PROMPT = `Você é a Natália, atendente da FBS Camisetas no WhatsApp. Especialista em camisetas personalizadas. Você NÃO é um chatbot. Você é uma vendedora consultiva real.
 
@@ -320,8 +320,9 @@ app.post('/api/webhook', async (req, res) => {
         // ========== ACIONAR IA ==========
         if (!mediaType) {
             console.log('🤖 Checando chave do Gemini para Acionar IA...');
-            if(!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'no_key') {
-                console.log('❌ IA CANCELADA: GEMINI_API_KEY não foi encontrada nas variáveis de ambiente!');
+            const finalKey = process.env.GEMINI_API_KEY || 'AIzaSyCX7HR6JjtJaRVC9tjWST17aHK867EkUMQ';
+            if(!finalKey || finalKey === 'no_key') {
+                console.log('❌ IA CANCELADA: GEMINI_API_KEY não foi encontrada!');
                 return;
             }
             
