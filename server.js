@@ -144,74 +144,45 @@ const enviarMensagemEvolution = async (number, text) => {
     }
 };
 
-const gerarRespostaIA = async (conversaId, nomeCliente, novaPergunta) => {
+const processarIA = async (remoteJid, mensagemTexto) => {
     try {
-        // Pega as últimas 15 mensagens para a IA ter contexto completo da conversa
-        const msgsDB = await prisma.mensagem.findMany({ 
-            where: { conversaId: conversaId }, 
-            orderBy: { criado_em: 'desc' }, 
-            take: 15 
+        console.log(`🤖 IA: Processando resposta para ${remoteJid}...`);
+        const conversa = await prisma.conversa.findUnique({ where: { id: remoteJid } });
+        if (!conversa || !conversa.status_bot) return;
+
+        const historico = await prisma.mensagem.findMany({
+            where: { conversaId: remoteJid },
+            orderBy: { criado_em: 'desc' },
+            take: 10
         });
-        const msgs = msgsDB.reverse();
 
-        const historico = [];
-        historico.push({ role: 'user', parts: [{ text: SYSTEM_PROMPT }]});
-        historico.push({ role: 'model', parts: [{ text: "Entendido! Sou a Natália da FBS Camisetas, pronta pra atender." }]});
+        const contexto = historico.reverse().map(m => 
+            `${m.origem === 'cliente' ? 'Cliente' : 'Vendedor'}: ${m.texto}`
+        ).join('\n');
 
-        // Consolidar mensagens sequenciais com a mesma role
-        for (const m of msgs) {
-            const role = m.origem === 'cliente' ? 'user' : 'model';
-            const texto = m.texto;
-            if (!texto) continue;
+        const prompt = `Você é o vendedor da FBS Camisetas. Curto, gentil e emojis.\n\nHistorico:\n${contexto}\nCliente: ${mensagemTexto}\nResposta:`;
 
-            const ultimo = historico[historico.length - 1];
-            if (ultimo.role === role) {
-                ultimo.parts[0].text += '\n' + texto;
-            } else {
-                historico.push({ role, parts: [{ text: texto }] });
-            }
+        let resposta = "";
+        if (process.env.OPENAI_API_KEY) {
+            const completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [{ role: "system", content: "Vendedor FBS Camisetas." }, { role: "user", content: prompt }],
+                max_tokens: 300
+            });
+            resposta = completion.choices[0].message.content;
+        } else {
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const result = await model.generateContent(prompt);
+            resposta = result.response.text();
         }
-        
-        // Garantir que o último item é 'user'
-        const msgFinal = historico.pop();
-        if (!msgFinal || msgFinal.role !== 'user') {
-            console.log('⚠️ Histórico inválido: último item não é user. Role:', msgFinal?.role);
-            // Se o último for model, adicionar a pergunta como user
-            if (msgFinal) historico.push(msgFinal);
-            const chatModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-            const chat = chatModel.startChat({ history: historico, generationConfig: { maxOutputTokens: 500, temperature: 0.5 }});
-            const result = await chat.sendMessage(novaPergunta);
-            return result.response.text();
+
+        if (resposta) {
+            await enviarMensagemEvolution(remoteJid, resposta);
+            await prisma.mensagem.create({ data: { conversaId: remoteJid, texto: resposta, origem: 'bot' } });
+            await prisma.conversa.update({ where: { id: remoteJid }, data: { ultima_mensagem: resposta } });
         }
-        
-        // Tentar com gemini-2.5-flash primeiro
-        const modelos = ["gemini-2.5-flash", "gemini-2.0-flash"];
-        
-        for (const modeloNome of modelos) {
-            try {
-                console.log(`🧠 Tentando modelo: ${modeloNome}...`);
-                const model = genAI.getGenerativeModel({ model: modeloNome });
-                const chat = model.startChat({ history: historico, generationConfig: { maxOutputTokens: 500, temperature: 0.5 }});
-                const result = await chat.sendMessage(msgFinal.parts[0].text);
-                const texto = result.response.text();
-                if (texto) {
-                    console.log(`✅ Modelo ${modeloNome} respondeu com sucesso!`);
-                    return texto;
-                }
-            } catch (modelErr) {
-                console.error(`❌ Modelo ${modeloNome} falhou:`, modelErr.message || modelErr);
-                // Continua para o próximo modelo
-            }
-        }
-        
-        console.error('❌ TODOS os modelos falharam!');
-        return null;
-    } catch(err) {
-        console.error('❌ Erro GERAL no Gemini:', err.message || err);
-        console.error('❌ Stack:', err.stack);
-        return null;
-    }
-}
+    } catch (err) { console.error('❌ Erro IA:', err.message); }
+};
 
 // Nova rota de verificação de status exigida
 app.get('/api/status', (req, res) => {
