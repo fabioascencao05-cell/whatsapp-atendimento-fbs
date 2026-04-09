@@ -18,8 +18,14 @@ app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static('public'));
 
 // Configurações de IA
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "AIzaSyCX7HR6JjtJaRVC9tjWST17aHK867EkUMQ");
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "no_key");
+// Instancia OpenAI apenas se a chave existir para evitar Erro Crítico
+let openai = null;
+if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+} else {
+    console.log('⚠️ OPENAI_API_KEY não encontrada. ChatGPT desativado.');
+}
 
 // Rastreio de mensagens para evitar loops
 const recentSystemMessages = new Map();
@@ -39,17 +45,28 @@ async function processarIA(remoteJid, textoDaMensagem) {
 
         const prompt = `Você é o atendente da FBS Camisetas. Responda de forma natural, curta e amigável. Para orçamentos, peça a quantidade e cor.\n\nCliente: ${textoDaMensagem}\nResposta:`;
 
-        console.log('🔌 Chamando OpenAI gpt-4o-mini...');
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                { role: "system", content: "Você é o atendente da FBS Camisetas." },
-                { role: "user", content: prompt }
-            ],
-            max_tokens: 300
-        });
+        let respostaIA = "";
 
-        const respostaIA = completion.choices[0].message.content;
+        // Tenta usar OpenAI se disponível
+        if (openai) {
+            console.log('🔌 Chamando OpenAI gpt-4o-mini...');
+            const completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                    { role: "system", content: "Você é o atendente da FBS Camisetas." },
+                    { role: "user", content: prompt }
+                ],
+                max_tokens: 300
+            });
+            respostaIA = completion.choices[0].message.content;
+        } 
+        // Se não tiver OpenAI mas tiver Gemini, usa Gemini como reserva
+        else if (process.env.GEMINI_API_KEY) {
+            console.log('🔌 Usando Gemini como fallback...');
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const result = await model.generateContent(prompt);
+            respostaIA = result.response.text();
+        }
 
         if (respostaIA) {
             console.log(`✅ GPT Respondeu: ${respostaIA}`);
