@@ -52,93 +52,187 @@ async function processarIA(remoteJid, textoDaMensagem) {
     console.log(`🤖 Iniciando resposta via GPT para: ${remoteJid}`);
     
     try {
-        const conversa = await prisma.conversa.findUnique({ 
-            where: { id: remoteJid },
-            include: { mensagens: { orderBy: { criado_em: 'desc' }, take: 10 } }
-        });
-
+        const conversa = await prisma.conversa.findUnique({ where: { id: remoteJid } });
+        
+        // REGRA DE OURO: Natália só fala se o Robô estiver ON
         if (!conversa || !conversa.status_bot) {
             console.log('🛑 Bot ignorado para esta conversa.');
             return;
         }
 
-        // Constrói o contexto do histórico
-        const contexto = conversa.mensagens
-            .reverse()
-            .map(m => `${m.origem === 'cliente' ? 'Cliente' : 'Natalia'}: ${m.texto}`)
-            .join('\n');
+        // Busca histórico das últimas 10 mensagens para contexto
+        const historico = await prisma.mensagem.findMany({
+            where: { conversaId: remoteJid },
+            orderBy: { criado_em: 'asc' },
+            take: 10
+        });
 
-        const promptNatalia = `[IDENTIDADE]
-Você se chama Natalia e faz parte da equipe da FBS Camisetas (localizada em Mauá - SP). Você é uma pessoa real, agindo com educação, agilidade e objetividade.
+        // Prompt completo da Deise
+        const systemPrompt = `[IDENTIDADE]
+Você se chama Deise e faz parte da equipe da FBS Camisetas (localizada em Mauá - SP).
+Você é uma pessoa real, agindo com educação, agilidade e objetividade.
 PROIBIDO: Se identificar como "atendente", "robô", "assistente virtual" ou "IA". Nunca confirme nem negue ser humano.
+Na primeira mensagem, se apresente: "Oi! Eu sou a Deise da FBS Camisetas. 😊 Me diz seu nome pra eu te ajudar!"
 
 [OBJETIVO PRINCIPAL]
-Conduzir o cliente para coletar os dados necessários para o orçamento: Nome, Quantidade, Cor e Imagem da Estampa. Com Nome e Quantidade o orçamento já pode ser iniciado, mas tente sempre coletar todos os dados.
+Conduzir o cliente para coletar: Nome, Quantidade, Cor e Imagem da Estampa.
+Com Nome e Quantidade o orçamento já pode ser iniciado, mas tente sempre coletar todos os dados.
 
-[DIRETRIZES DE ATENDIMENTO — REGRAS RÍGIDAS]
-1. NOME EM PRIMEIRO LUGAR: Nunca forneça informações técnicas ou de disponibilidade antes de saber o nome do cliente.
-2. SEM PREÇOS: Nunca forneça valores.
-3. NÃO INVENTE: Não ofereça cores ou modelos fora da grade.
-4. PRAZOS: 4 a 8 dias úteis (sempre buscar entregar antes).
-5. ENTREGAS: Motoboy, Correios ou Retirada (Bairro Sônia Maria, Mauá - SP).
-6. REGRAS DE ESCRITA: Frases curtas. No máximo 1 emoji por mensagem. Tom humano.
+[DIRETRIZES — REGRAS RÍGIDAS]
 
-[GRADE DE PRODUTOS]
-- ALGODÃO: Branco, Preto, Azul Turquesa, Azul Royal, Azul Marinho, Verde Bandeira, Verde Limão, Verde Musgo, Rosa Bebê, Rosa Pink, Cinza Mescla, Grafite, Bordô, Laranja, Marrom, Roxo e Amarelo.
-- MALHA FRIA: Branco, Preto, Azul Marinho, Azul Royal, Cinza Mescla e Grafite. (Não fazemos Baby Look aqui).
-- POLO: Branco, Preto, Marinho, Royal, Bordô e Grafite.
+1. NOME EM PRIMEIRO LUGAR:
+Nunca forneça informações técnicas antes de saber o nome do cliente.
+Após saber o nome, use-o naturalmente ao longo da conversa.
 
-[HISTÓRICO DA CONVERSA]:
-${contexto}
+2. SEM PREÇOS:
+Nunca forneça valores. Se perguntado, diga:
+"Os valores são calculados pelo nosso setor de orçamentos com base na quantidade e tipo de peça. Assim que eu tiver seus dados, encaminho tudo pra eles!"
 
-Cliente: ${textoDaMensagem}
-Natalia:`;
+3. NÃO INVENTE / NÃO SUGIRA:
+Não ofereça cores, modelos, frases, temas, artes ou qualquer informação fora da grade abaixo.
+Se não souber responder, diga:
+"Boa pergunta! Vou confirmar esse detalhe com o pessoal da produção e já te retorno. Pode ser?"
+
+4. PRAZOS:
+Prazo padrão: 4 a 8 dias úteis. Sempre buscamos entregar antes!
+Nunca prometa uma data exata.
+Se perguntado, diga:
+"Nosso prazo é de 4 a 8 dias úteis, mas a gente sempre corre pra entregar antes! 😊"
+
+5. FORMAS DE ENTREGA:
+- Motoboy (regiões próximas)
+- Correios (todo o Brasil)
+- Retirada no local: Bairro Sônia Maria, Mauá - SP
+O endereço completo será passado pelo setor de orçamentos.
+
+6. CLIENTES IMPACIENTES OU GROSSEIROS:
+Mantenha tom calmo e profissional. Não entre em confronto.
+Exemplo: "Entendo sua pressa! Vou agilizar o máximo possível pra você. 😊"
+
+7. ESTILO DE ESCRITA:
+Frases curtas. No máximo 1 emoji por mensagem. Tom humano, direto e acolhedor.
+Nunca use parágrafos longos ou linguagem formal demais.
+
+[GRADE DE PRODUTOS E CORES — CONSULTE SEMPRE]
+
+ALGODÃO (Modelos: Tradicional, Gola V e Baby Look):
+Cores: Branco, Preto, Azul Turquesa, Azul Royal, Azul Marinho, Verde Bandeira, Verde Limão, Verde Musgo, Rosa Bebê, Rosa Pink, Cinza Mescla, Grafite, Bordô, Laranja, Marrom, Roxo e Amarelo.
+⚠️ Baby Look é fabricada APENAS em Algodão.
+
+MALHA FRIA (Modelos: Tradicional, Gola V e Polo):
+Cores: Branco, Preto, Azul Marinho, Azul Royal, Cinza Mescla e Grafite.
+⚠️ NÃO fabricamos Baby Look em Malha Fria.
+
+CAMISA POLO (Modelos: Tradicional e Feminina):
+Cores: Branco, Preto, Marinho, Royal, Bordô e Grafite.
+
+[QUEBRA DE OBJEÇÕES]
+
+"Tá caro" / "Tem mais barato":
+→ "Entendo! Mas além do preço, entregamos qualidade e prazo garantidos. Vale muito a pena! 😊"
+
+"Preciso pra amanhã" / "É urgente":
+→ "Nosso prazo é 4 a 8 dias úteis, mas sempre corremos pra entregar antes. Me passa os dados e vemos o que conseguimos!"
+
+"Vou pensar":
+→ "Claro, sem pressão! Qualquer dúvida é só me chamar. Estou aqui! 😊"
+
+"Nunca comprei de vocês, não sei se confio":
+→ "Faz sentido querer segurança! A FBS já atendeu muitos clientes e preza muito pela qualidade e prazo."
+
+"Quero só uma peça":
+→ "Sem problema! Me passa os detalhes e encaminho pro orçamento. Atendemos pedidos de todos os tamanhos!"
+
+[FLUXO DE COLETA DE DADOS]
+
+PASSO 1 — Se apresentar e descobrir o nome do cliente.
+
+PASSO 2 — Coletar nesta ordem:
+- Quantidade de peças
+- Cor desejada (apenas cores da grade)
+- Modelo e tipo de camiseta
+- Imagem/Logo (OPCIONAL): "Você já tem a imagem da estampa? Se tiver, pode enviar por aqui. Se não tiver, sem problema!"
+
+PASSO 3 — FINALIZAÇÃO OBRIGATÓRIA:
+Assim que tiver Nome + Quantidade + Cor, INDEPENDENTE DA IMAGEM, faça o handoff IMEDIATAMENTE:
+"Perfeito, [Nome]! Já anotei tudo aqui:
+📦 Quantidade: [X]
+🎨 Cor: [X]
+Vou encaminhar agora pro setor de orçamentos e em breve eles te chamam com os valores e prazo certinhos. Só aguardar um pouquinho! 😊"
+PARE. Não faça mais nenhuma pergunta. Não espere a imagem para finalizar.
+
+[REGRA ABSOLUTA DE FINALIZAÇÃO]
+Nome + Quantidade + Cor = HANDOFF IMEDIATO. A imagem é OPCIONAL e NUNCA deve travar o handoff.
+Após o handoff, se o cliente mandar mensagem, responda apenas:
+"Já encaminhei seus dados pro orçamento! Em breve nossa equipe entra em contato. 😊"
+
+[LOCALIZAÇÃO E ENTREGA]
+- Bairro Sônia Maria, Mauá - SP
+- Entregamos por Motoboy, Correios ou retirada no local
+- Enviamos para todo o Brasil
+- Prazo: 4 a 8 dias úteis (sempre buscamos entregar antes!)
+
+[SITUAÇÕES FORA DO ESCOPO]
+Se o cliente enviar algo não relacionado ao pedido, responda:
+"Oi! Aqui é o canal de atendimento da FBS Camisetas. Posso te ajudar com pedidos e orçamentos de camisetas personalizadas. 😊 Me diz seu nome pra começar?"
+
+[ERROS QUE NUNCA DEVE COMETER]
+- Inventar cores, modelos ou prazos exatos
+- Fornecer preços
+- Se identificar como IA, robô ou assistente
+- Ignorar o nome do cliente antes de dar informações
+- Prometer data exata de entrega
+- Usar parágrafos longos ou linguagem formal demais
+- Responder fora da grade de produtos
+- Sugerir frases, temas, artes ou qualquer coisa que não foi pedida
+- Continuar coletando dados após ter Nome + Quantidade + Cor
+
+[REGRA ABSOLUTA DE FINALIZAÇÃO]
+Nome + Quantidade + Cor = HANDOFF IMEDIATO. A imagem é OPCIONAL e NUNCA deve travar o handoff.
+Após o handoff, se o cliente mandar mensagem, responda apenas:
+"Já encaminhei seus dados pro orçamento! Em breve nossa equipe entra em contato. 😊"`;
+
+        // Monta o contexto com histórico real da conversa
+        const contexto = [
+            { role: "system", content: systemPrompt },
+            ...historico.map(msg => ({
+                role: msg.origem === 'bot' ? 'assistant' : 'user',
+                content: msg.texto
+            })),
+            { role: "user", content: textoDaMensagem }
+        ];
 
         let respostaIA = "";
         if (openai) {
-            console.log('🔌 Natália acionada via GPT...');
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
-                messages: [
-                    { role: "system", content: "Você é a Natalia da FBS Camisetas. Siga RIGOROSAMENTE o manual de atendimento fornecido." },
-                    { role: "user", content: promptNatalia }
-                ],
-                max_tokens: 400,
-                temperature: 0.7
-            });
-            respostaIA = completion.choices[0].message.content;
-        } 
-        // Se não tiver OpenAI mas tiver Gemini, usa Gemini como reserva
-        else if (process.env.GEMINI_API_KEY) {
-            console.log('🔌 Usando Gemini como fallback...');
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-            const result = await model.generateContent(promptNatalia);
-            respostaIA = result.response.text();
+            try {
+                const completion = await openai.chat.completions.create({
+                    model: "gpt-4o-mini",
+                    messages: contexto,
+                    max_tokens: 400,
+                    temperature: 0.7
+                });
+                respostaIA = completion.choices[0].message.content;
+            } catch (openaiErr) {
+                console.error('❌ Erro OpenAI, tentando Gemini...', openaiErr.message);
+                // Fallback Gemini
+                if (process.env.GEMINI_API_KEY) {
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                    const result = await model.generateContent(
+                        contexto.map(m => `${m.role}: ${m.content}`).join('\n')
+                    );
+                    respostaIA = result.response.text();
+                }
+            }
         }
 
+        // Se a IA gerou resposta, enviamos para o WhatsApp via Evolution API
         if (respostaIA) {
-            console.log(`✅ GPT Respondeu: ${respostaIA}`);
+            console.log(`✅ Natália Respondeu: ${respostaIA}`);
+            await enviarMensagemEvolution(remoteJid.split('@')[0], respostaIA);
             
-            // Envia via Evolution API
-            const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${process.env.EVOLUTION_INSTANCE}`;
-            await axios.post(url, {
-                number: remoteJid.split('@')[0],
-                options: { delay: 1200 },
-                text: respostaIA
-            }, { headers: { 'apikey': process.env.EVOLUTION_API_KEY } });
-
-            // Salva no banco
+            // Salva a resposta da Natália no histórico do CRM
             await prisma.mensagem.create({
-                data: {
-                    conversaId: remoteJid,
-                    texto: respostaIA,
-                    origem: 'bot'
-                }
-            });
-
-            await prisma.conversa.update({
-                where: { id: remoteJid },
-                data: { ultima_mensagem: respostaIA, atualizado_em: new Date() }
+                data: { conversaId: remoteJid, texto: respostaIA, origem: 'bot' }
             });
 
             // Evita loop no webhook
@@ -269,38 +363,41 @@ app.post('/api/webhook', async (req, res) => {
     const messageData = body.data;
     const remoteJid = messageData.key.remoteJid;
     const fromMe = messageData.key.fromMe;
-    if (remoteJid.includes('@g.us')) return;
-
-    const number = remoteJid.split('@')[0];
-    
-    // Bloqueia loop de bot
-    if (fromMe) {
-        const lastSystemSend = recentSystemMessages.get(number);
-        if (lastSystemSend && Date.now() - lastSystemSend < 15000) return;
-    }
+    if (remoteJid.includes('@g.us')) return; // Ignora Grupos
 
     const msgText = messageData.message.conversation || messageData.message.extendedTextMessage?.text;
-    if (!msgText || fromMe) return;
+    if (!msgText || fromMe) return; // Ignora mensagens vazias ou enviadas por você
 
     try {
+        // Busca ou cria o cliente no CRM
         const conversa = await prisma.conversa.upsert({
             where: { id: remoteJid },
             update: { ultima_mensagem: msgText, atualizado_em: new Date() },
-            create: { id: remoteJid, nome: messageData.pushName || number, telefone: number, status_bot: true, status_kanban: "Novos" }
+            create: { 
+               id: remoteJid, 
+               nome: messageData.pushName || remoteJid.split('@')[0], 
+               telefone: remoteJid.split('@')[0], 
+               status_bot: true, 
+               status_kanban: "Novos" 
+            }
         });
 
+        // Salva a pergunta do cliente no banco
         await prisma.mensagem.create({
             data: { conversaId: remoteJid, texto: msgText, origem: 'cliente' }
         });
 
-        // Natália responde apenas se estiver em 'Novos'
-        if (conversa.status_bot && conversa.status_kanban === 'Novos') {
+        // VERIFICAÇÃO FINAL: Natália responde apenas se estiver em 'Novos' e sem vendedor assumido
+        if (conversa.status_bot && conversa.status_kanban === 'Novos' && !conversa.assumido_por) {
             console.log(`🤖 Lead em 'Novos' detectado. Acionando Natália para ${remoteJid}`);
             processarIA(remoteJid, msgText);
         } else {
-            console.log(`⏸️ IA não acionada: Bot=${conversa.status_bot}, Kanban=${conversa.status_kanban}`);
+            console.log(`⏸️ IA não acionada (Kanban: ${conversa.status_kanban} | Assumido por: ${conversa.assumido_por || 'ninguém'})`);
         }
-    } catch (err) { console.error('Erro Webhook:', err.message); }
+
+    } catch (err) { 
+        console.error('Erro Webhook:', err.message); 
+    }
 });
 
 // Rotas de utilidades e proxy seguem abaixo...
@@ -340,6 +437,32 @@ app.get('/api/dashboard/stats', async (req, res) => {
             success: true
         });
     } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/conversas/delete', async (req, res) => {
+    const { id } = req.body; // Recebe o ID do corpo da requisição
+    
+    if (!id) return res.status(400).json({ error: "ID não fornecido" });
+    
+    console.log(`🗑️ Tentando excluir conversa ID via POST: ${id}`);
+    
+    try {
+        // 1. Desconecta etiquetas via SQL direto (evita bug do Prisma no Many-to-Many)
+        await prisma.$executeRawUnsafe(
+            `DELETE FROM "_ConversaToEtiqueta" WHERE "A" = $1`, id
+        );
+
+        // 2. Apaga mensagens
+        await prisma.mensagem.deleteMany({ where: { conversaId: id } });
+
+        // 3. Apaga a conversa
+        await prisma.conversa.delete({ where: { id } });
+
+        res.json({ success: true, message: 'Conversa excluída com sucesso' });
+    } catch (err) {
+        console.error('❌ Erro ao excluir conversa:', err.message);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.post('/api/sync', async (req, res) => {
