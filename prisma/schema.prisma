@@ -14,6 +14,7 @@ model Conversa {
   profile_pic_url String?
   status_bot      Boolean    @default(true)
   ultima_mensagem String?
+  valor_conversa  Float      @default(0) // Novo: Valor financeiro do lead
   
   // Phase 5 Fills
   status_kanban   String     @default("Novos") // Novos, Em Orçamento, Aguardando Arte/Aprovação, Em Produção, Finalizado

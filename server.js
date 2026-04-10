@@ -204,6 +204,38 @@ app.post('/api/conversas/:id/enviar', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/conversas/:id/valor', async (req, res) => {
+    const { valor } = req.body;
+    try {
+        const conversa = await prisma.conversa.update({
+            where: { id: req.params.id },
+            data: { valor_conversa: parseFloat(valor) || 0 }
+        });
+        res.json(conversa);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/broadcast', async (req, res) => {
+    const { ids, texto } = req.body;
+    res.json({ message: `Iniciando disparo para ${ids.length} clientes...` });
+
+    // Processamento em background para não travar a requisição
+    (async () => {
+        for (const id of ids) {
+            try {
+                await enviarMensagemEvolution(id.split('@')[0], texto);
+                await prisma.mensagem.create({
+                    data: { conversaId: id, texto, origem: 'loja' }
+                });
+                // Delay de 3 a 5 segundos entre cada mensagem (Segurança)
+                const delay = Math.floor(Math.random() * 2000) + 3000;
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } catch (err) { console.error(`Erro broadcast para ${id}:`, err.message); }
+        }
+        console.log('✅ Broadcast finalizado!');
+    })();
+});
+
 // ==========================================
 // WEBHOOK
 // ==========================================
