@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "FBS CRM - WhatsApp Extension",
+  "version": "2.1.0",
+  "description": "CRM Integrado para WhatsApp Web (FBS Camisetas)",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "https://crmwhats.fbssistema.cloud/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["assets/content.js"],
+      "css": ["assets/index.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*"],
+      "matches": ["https://web.whatsapp.com/*"]
+    }
+  ],
+  "action": {
+    "default_popup": "index.html"
+  }
+}
