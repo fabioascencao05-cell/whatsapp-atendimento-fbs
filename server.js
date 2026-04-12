@@ -375,6 +375,41 @@ app.get('/api/proxy-media', async (req, res) => {
     } catch (err) { res.sendStatus(404); }
 });
 
+app.post('/api/sync', async (req, res) => {
+    console.log('🔄 Iniciando sincronização de fotos...');
+    try {
+        const conversas = await prisma.conversa.findMany({
+            where: { profile_pic_url: null }
+        });
+        
+        let atualizadas = 0;
+        
+        for (const c of conversas) {
+            try {
+                const url = `${process.env.EVOLUTION_API_URL}/chat/fetchProfilePictureUrl/${process.env.EVOLUTION_INSTANCE}`;
+                const response = await axios.post(url, { number: c.id }, {
+                    headers: { 'apikey': process.env.EVOLUTION_API_KEY }
+                });
+                
+                if (response.data && response.data.profilePictureUrl) {
+                    await prisma.conversa.update({
+                        where: { id: c.id },
+                        data: { profile_pic_url: response.data.profilePictureUrl }
+                    });
+                    atualizadas++;
+                }
+            } catch (err) {
+                // Ignore errors for individual fetch (e.g. no profile picture config on user side)
+            }
+        }
+        
+        res.json({ message: `Sincronização concluída! ${atualizadas} fotos atualizadas.` });
+    } catch (err) {
+        console.error('❌ Erro na sincronização:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ==========================================
 // CRON: FOLLOW-UP AUTOMÁTICO
 // ==========================================
