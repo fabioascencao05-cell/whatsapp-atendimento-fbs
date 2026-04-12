@@ -94,7 +94,7 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
   const handleDelete = async () => {
     try {
       await deleteConversa(conversa.id);
-      toast.success('Conversa excluída');
+      toast.success('Conversa movida para a lixeira');
       onDelete?.(conversa.id);
     } catch (err: any) {
       toast.error('Erro ao excluir: ' + (err.message || 'Desconhecido'));

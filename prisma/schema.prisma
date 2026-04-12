@@ -26,6 +26,10 @@ model Conversa {
   unreadCount     Int        @default(0)
   lembrete_horas  Int?       // Quantas horas para disparar o follow-up se não houver resposta
   
+  // Soft Delete
+  deleted_at      DateTime?
+  deleted_by      String?
+
   criado_em       DateTime   @default(now())
   atualizado_em   DateTime   @updatedAt
   mensagens       Mensagem[]

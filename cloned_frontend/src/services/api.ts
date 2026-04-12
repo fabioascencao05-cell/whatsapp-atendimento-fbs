@@ -119,8 +119,28 @@ export async function deleteConversa(id: string) {
   });
 }
 
+export async function restaurarConversa(id: string) {
+  return tryFetch('/api/conversas/restaurar', { 
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  });
+}
+
+export async function deletePermanente(id: string) {
+  return tryFetch('/api/conversas/delete-permanente', { 
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  });
+}
+
+export async function fetchLixeira(): Promise<Conversa[]> {
+  return tryFetch('/api/conversas/lixeira');
+}
+
 export async function fetchStats() {
-  return tryFetch('/api/dashboard/stats');
+  return tryFetch('/api/stats');
 }
 
 export async function syncConversas(): Promise<{ message: string }> {

@@ -218,13 +218,42 @@ app.post('/api/webhook', async (req, res) => {
 // ROTAS DA DASHBOARD
 // ==========================================
 
-// ⚠️ ROTA DE EXCLUSÃO DEVE VIR ANTES DE /api/conversas/:id
+// ⚠️ ROTA DE SOFT DELETE (Lixeira)
 app.post('/api/conversas/delete', async (req, res) => {
     const { id } = req.body;
     if (!id) return res.status(400).json({ error: "ID não fornecido" });
-    console.log(`🗑️ Excluindo conversa: ${id}`);
+    console.log(`🗑️ Soft delete conversa: ${id}`);
     try {
-        // Desvincula etiquetas para evitar Foreign Key Constraint Error
+        await prisma.conversa.update({
+            where: { id },
+            data: { deleted_at: new Date(), deleted_by: 'operador' }
+        });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('❌ Erro ao excluir:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Restaurar da lixeira
+app.post('/api/conversas/restaurar', async (req, res) => {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ error: "ID não fornecido" });
+    try {
+        await prisma.conversa.update({
+            where: { id },
+            data: { deleted_at: null, deleted_by: null }
+        });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Exclusão definitiva
+app.post('/api/conversas/delete-permanente', async (req, res) => {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ error: "ID não fornecido" });
+    console.log(`💀 Exclusão PERMANENTE: ${id}`);
+    try {
         await prisma.conversa.update({
             where: { id },
             data: { etiquetas: { set: [] } }
@@ -233,14 +262,28 @@ app.post('/api/conversas/delete', async (req, res) => {
         await prisma.conversa.delete({ where: { id } });
         res.json({ success: true });
     } catch (err) {
-        console.error('❌ Erro ao excluir:', err.message);
+        console.error('❌ Erro ao excluir permanentemente:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
+// Listar lixeira
+app.get('/api/conversas/lixeira', async (req, res) => {
+    try {
+        const conversas = await prisma.conversa.findMany({
+            where: { deleted_at: { not: null } },
+            include: { etiquetas: true },
+            orderBy: { deleted_at: 'desc' }
+        });
+        res.json(conversas);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Listar conversas ativas (exclui soft deleted)
 app.get('/api/conversas', async (req, res) => {
     try {
         const conversas = await prisma.conversa.findMany({
+            where: { deleted_at: null },
             include: { etiquetas: true },
             orderBy: { atualizado_em: 'desc' }
         });
@@ -261,7 +304,6 @@ app.get('/api/conversas/:id', async (req, res) => {
             orderBy: { criado_em: 'asc' }
         });
         
-        // Pedidos removidos do schema nessa fase 4 simplificada, então enviamos array vazio para o Frontend não quebrar
         res.json({ conversa, mensagens, pedidos: [] });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -284,10 +326,34 @@ app.post('/api/conversas/:id/enviar', async (req, res) => {
         const msg = await prisma.mensagem.create({
             data: { conversaId: id, texto, origem: 'loja' }
         });
+        // Marca como assumido por humano
+        await prisma.conversa.update({
+            where: { id },
+            data: { assumido_por: 'humano', atualizado_em: new Date() }
+        });
         res.json(msg);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Pausar Bot (rota que o frontend espera)
+app.post('/api/conversas/:id/pausar', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await prisma.conversa.update({ where: { id }, data: { status_bot: false, assumido_por: 'humano' } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Ativar Bot (rota que o frontend espera)
+app.post('/api/conversas/:id/ativar', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await prisma.conversa.update({ where: { id }, data: { status_bot: true, assumido_por: null } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Toggle genérico de bot (mantido por compatibilidade)
 app.post('/api/conversas/:id/bot', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
@@ -311,6 +377,16 @@ app.post('/api/conversas/:id/valor', async (req, res) => {
     const { valor } = req.body;
     try {
         await prisma.conversa.update({ where: { id }, data: { valor_conversa: valor } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Tags do painel lateral
+app.post('/api/conversas/:id/tags', async (req, res) => {
+    const { id } = req.params;
+    const { tags } = req.body;
+    try {
+        await prisma.conversa.update({ where: { id }, data: { tags } });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -369,12 +445,38 @@ app.delete('/api/respostas/:id', async (req, res) => {
     res.json({ success: true });
 });
 
+// Stats - disponível em AMBAS as URLs para compatibilidade
 app.get('/api/stats', async (req, res) => {
     try {
-        const totalLeads = await prisma.conversa.count();
-        const faturamentoTotal = await prisma.conversa.aggregate({ _sum: { valor_conversa: true } });
+        const totalLeads = await prisma.conversa.count({ where: { deleted_at: null } });
+        const faturamentoTotal = await prisma.conversa.aggregate({ 
+            where: { deleted_at: null },
+            _sum: { valor_conversa: true } 
+        });
         const leadsPorEtapa = await prisma.conversa.groupBy({
             by: ['status_kanban'],
+            where: { deleted_at: null },
+            _count: { id: true }
+        });
+        res.json({
+            totalLeads,
+            faturamento: faturamentoTotal._sum.valor_conversa || 0,
+            leadsPorEtapa
+        });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Alias para o frontend que chama /api/dashboard/stats
+app.get('/api/dashboard/stats', async (req, res) => {
+    try {
+        const totalLeads = await prisma.conversa.count({ where: { deleted_at: null } });
+        const faturamentoTotal = await prisma.conversa.aggregate({
+            where: { deleted_at: null },
+            _sum: { valor_conversa: true }
+        });
+        const leadsPorEtapa = await prisma.conversa.groupBy({
+            by: ['status_kanban'],
+            where: { deleted_at: null },
             _count: { id: true }
         });
         res.json({
@@ -398,7 +500,7 @@ app.post('/api/sync', async (req, res) => {
     console.log('🔄 Iniciando sincronização de fotos...');
     try {
         const conversas = await prisma.conversa.findMany({
-            where: { profile_pic_url: null }
+            where: { profile_pic_url: null, deleted_at: null }
         });
         
         let atualizadas = 0;
@@ -418,7 +520,7 @@ app.post('/api/sync', async (req, res) => {
                     atualizadas++;
                 }
             } catch (err) {
-                // Ignore errors for individual fetch (e.g. no profile picture config on user side)
+                // Ignore errors for individual fetch
             }
         }
         
@@ -427,6 +529,38 @@ app.post('/api/sync', async (req, res) => {
         console.error('❌ Erro na sincronização:', err.message);
         res.status(500).json({ error: err.message });
     }
+});
+
+// ==========================================
+// DISPARO EM MASSA (BROADCAST)
+// ==========================================
+app.post('/api/broadcast', async (req, res) => {
+    const { ids, texto } = req.body;
+    if (!ids || !ids.length || !texto) return res.status(400).json({ error: "IDs e texto são obrigatórios" });
+    
+    console.log(`📡 Disparo em massa para ${ids.length} contatos`);
+    
+    let enviados = 0;
+    let falhas = 0;
+    
+    // Disparo com intervalo de 3-5 segundos entre cada envio
+    for (const id of ids) {
+        try {
+            const number = id.split('@')[0];
+            await enviarMensagemEvolution(number, texto);
+            await prisma.mensagem.create({
+                data: { conversaId: id, texto, origem: 'loja' }
+            });
+            enviados++;
+        } catch (err) {
+            console.error(`❌ Falha ao enviar para ${id}:`, err.message);
+            falhas++;
+        }
+        // Rate limiting: espera entre 3 e 5 segundos entre cada mensagem
+        await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 2000));
+    }
+    
+    res.json({ message: `Disparo concluído! ${enviados} enviados, ${falhas} falhas.` });
 });
 
 // ==========================================
