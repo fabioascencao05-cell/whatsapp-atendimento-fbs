@@ -629,18 +629,92 @@ app.post('/api/broadcast', async (req, res) => {
 });
 
 // ==========================================
-// CRON: FOLLOW-UP AUTOMÁTICO
+// FOLLOW-UP MANUAL (CRUD)
 // ==========================================
-cron.schedule('0 * * * *', async () => {
+app.get('/api/followups', async (req, res) => {
+    try {
+        const followups = await prisma.followUp.findMany({
+            include: { conversa: { select: { nome: true, telefone: true, profile_pic_url: true, status_kanban: true } } },
+            orderBy: { agendado_para: 'asc' }
+        });
+        res.json(followups);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/followups', async (req, res) => {
+    const { conversaId, texto, agendado_para } = req.body;
+    if (!conversaId || !texto || !agendado_para) return res.status(400).json({ error: 'Campos obrigatórios: conversaId, texto, agendado_para' });
+    try {
+        const followup = await prisma.followUp.create({
+            data: { conversaId, texto, agendado_para: new Date(agendado_para) }
+        });
+        console.log(`📌 Follow-up agendado para ${conversaId} em ${agendado_para}`);
+        res.json(followup);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/followups/:id/cancelar', async (req, res) => {
+    try {
+        await prisma.followUp.update({
+            where: { id: req.params.id },
+            data: { status: 'cancelado' }
+        });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/followups/:id', async (req, res) => {
+    try {
+        await prisma.followUp.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==========================================
+// CRON: FOLLOW-UP AUTOMÁTICO + AGENDADOS
+// ==========================================
+cron.schedule('*/5 * * * *', async () => {
     console.log('⏰ Rodando verificação de Follow-up...');
     try {
         const agora = new Date();
+
+        // 1. Follow-ups manuais agendados
+        const agendados = await prisma.followUp.findMany({
+            where: {
+                status: 'pendente',
+                agendado_para: { lte: agora }
+            },
+            include: { conversa: true }
+        });
+
+        for (const fu of agendados) {
+            try {
+                await enviarMensagemEvolution(fu.conversa.telefone, fu.texto);
+                await prisma.mensagem.create({
+                    data: { conversaId: fu.conversaId, texto: fu.texto, origem: 'loja' }
+                });
+                await prisma.followUp.update({
+                    where: { id: fu.id },
+                    data: { status: 'enviado', enviado_em: new Date(), tentativas: fu.tentativas + 1 }
+                });
+                console.log(`✅ Follow-up agendado enviado para: ${fu.conversa.nome}`);
+            } catch (err) {
+                await prisma.followUp.update({
+                    where: { id: fu.id },
+                    data: { tentativas: fu.tentativas + 1 }
+                });
+                console.error(`❌ Falha follow-up para ${fu.conversa.nome}:`, err.message);
+            }
+        }
+
+        // 2. Follow-ups automáticos por etiqueta
         const etiquetasComFollowup = await prisma.etiqueta.findMany({
             where: { followup_texto: { not: null }, followup_horas: { not: null } }
         });
         for (const etiqueta of etiquetasComFollowup) {
             const conversas = await prisma.conversa.findMany({
                 where: {
+                    deleted_at: null,
                     etiquetas: { some: { id: etiqueta.id } },
                     atualizado_em: { lte: new Date(agora.getTime() - etiqueta.followup_horas * 60 * 60 * 1000) }
                 }
@@ -654,7 +728,7 @@ cron.schedule('0 * * * *', async () => {
                     where: { id: lead.id },
                     data: { atualizado_em: new Date() }
                 });
-                console.log(`✅ Follow-up enviado para: ${lead.nome}`);
+                console.log(`✅ Follow-up automático enviado para: ${lead.nome}`);
             }
         }
     } catch (err) {

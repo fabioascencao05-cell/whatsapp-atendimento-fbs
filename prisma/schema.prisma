@@ -33,6 +33,7 @@ model Conversa {
   criado_em       DateTime   @default(now())
   atualizado_em   DateTime   @updatedAt
   mensagens       Mensagem[]
+  followups       FollowUp[]
 }
 
 model Mensagem {
@@ -77,4 +78,16 @@ model Usuario {
   email     String   @unique
   senha     String
   criado_em DateTime @default(now())
+}
+
+model FollowUp {
+  id            String   @id @default(uuid())
+  conversaId    String
+  conversa      Conversa @relation(fields: [conversaId], references: [id])
+  texto         String
+  agendado_para DateTime
+  status        String   @default("pendente") // pendente, enviado, cancelado
+  tentativas    Int      @default(0)
+  criado_em     DateTime @default(now())
+  enviado_em    DateTime?
 }

@@ -146,3 +146,24 @@ export async function fetchStats() {
 export async function syncConversas(): Promise<{ message: string }> {
   return tryFetch('/api/sync', { method: 'POST' });
 }
+
+// Follow-Up
+export async function fetchFollowUps() {
+  return tryFetch('/api/followups');
+}
+
+export async function criarFollowUp(data: { conversaId: string; texto: string; agendado_para: string }) {
+  return tryFetch('/api/followups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+}
+
+export async function cancelarFollowUp(id: string) {
+  return tryFetch(`/api/followups/${id}/cancelar`, { method: 'POST' });
+}
+
+export async function deletarFollowUp(id: string) {
+  return tryFetch(`/api/followups/${id}`, { method: 'DELETE' });
+}
