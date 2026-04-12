@@ -405,6 +405,19 @@ app.post('/api/conversas/:id/ativar', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Editar dados do cliente
+app.post('/api/conversas/:id/editar', async (req, res) => {
+    const { id } = req.params;
+    const { nome, telefone } = req.body;
+    try {
+        const data = {};
+        if (nome) data.nome = nome;
+        if (telefone) data.telefone = telefone;
+        await prisma.conversa.update({ where: { id }, data });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Toggle genérico de bot (mantido por compatibilidade)
 app.post('/api/conversas/:id/bot', async (req, res) => {
     const { id } = req.params;

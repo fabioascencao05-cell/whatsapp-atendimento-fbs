@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, Phone, Tag, Plus, X, Columns3, ArrowLeft } from 'lucide-react';
+import { User, Phone, Tag, Plus, X, Columns3, ArrowLeft, Edit2, Check, Bot, BotOff } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import type { Conversa, RespostaRapida } from '@/types/crm';
 import { salvarTags, mudarKanban } from '@/services/api';
 import { useEtiquetas } from '@/contexts/EtiquetasContext';
+import { toast } from 'sonner';
 
 interface Props {
   conversa: Conversa;
@@ -21,7 +22,43 @@ export function ClientPanel({ conversa, respostas, onConversaUpdate, onBack }: P
   const [newTag, setNewTag] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
 
+  // Edição de nome
+  const [editingNome, setEditingNome] = useState(false);
+  const [nomeEdit, setNomeEdit] = useState(conversa.nome);
+
+  // Edição de telefone
+  const [editingTelefone, setEditingTelefone] = useState(false);
+  const [telefoneEdit, setTelefoneEdit] = useState(conversa.telefone);
+
   const currentTags = conversa.tags ? conversa.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+  const handleSaveNome = async () => {
+    if (!nomeEdit.trim()) return;
+    try {
+      await fetch(`/api/conversas/${conversa.id}/editar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: nomeEdit.trim() })
+      });
+      onConversaUpdate?.({ ...conversa, nome: nomeEdit.trim() });
+      toast.success('Nome atualizado');
+      setEditingNome(false);
+    } catch { toast.error('Erro ao salvar nome'); }
+  };
+
+  const handleSaveTelefone = async () => {
+    if (!telefoneEdit.trim()) return;
+    try {
+      await fetch(`/api/conversas/${conversa.id}/editar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefone: telefoneEdit.trim() })
+      });
+      onConversaUpdate?.({ ...conversa, telefone: telefoneEdit.trim() });
+      toast.success('Telefone atualizado');
+      setEditingTelefone(false);
+    } catch { toast.error('Erro ao salvar telefone'); }
+  };
 
   const handleAddTag = async () => {
     const tag = newTag.trim();
@@ -49,10 +86,7 @@ export function ClientPanel({ conversa, respostas, onConversaUpdate, onBack }: P
     onConversaUpdate?.({ ...conversa, status_kanban: status });
   };
 
-  // Dynamic pipeline options from etiquetas
-  const pipelineOptions = etiquetasDisponiveis.length > 0
-    ? etiquetasDisponiveis.map(e => e.nome)
-    : ['Novos', 'Em Negociação', 'Fechados', 'Finalizados'];
+  const pipelineOptions = ['Novos', 'Em Negociação', 'Aguardando Pagamento', 'Pedido Aprovado', 'Pedido Entregue'];
 
   return (
     <div className="flex flex-col h-full bg-card border-l">
@@ -81,10 +115,58 @@ export function ClientPanel({ conversa, respostas, onConversaUpdate, onBack }: P
               {conversa.nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
           )}
-          <h3 className="font-semibold text-sm">{conversa.nome}</h3>
-          <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-            <Phone size={12} /> {conversa.telefone}
-          </p>
+
+          {/* Nome editável */}
+          {editingNome ? (
+            <div className="flex items-center gap-1 justify-center mt-1">
+              <Input
+                value={nomeEdit}
+                onChange={e => setNomeEdit(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveNome(); if (e.key === 'Escape') setEditingNome(false); }}
+                className="text-xs h-7 w-36 text-center"
+                autoFocus
+              />
+              <Button size="icon" variant="ghost" className="h-6 w-6 text-success" onClick={handleSaveNome}>
+                <Check size={12} />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => { setEditingNome(false); setNomeEdit(conversa.nome); }}>
+                <X size={12} />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-1">
+              <h3 className="font-semibold text-sm">{conversa.nome}</h3>
+              <button onClick={() => { setEditingNome(true); setNomeEdit(conversa.nome); }} className="text-muted-foreground hover:text-primary transition-colors">
+                <Edit2 size={11} />
+              </button>
+            </div>
+          )}
+
+          {/* Telefone editável */}
+          {editingTelefone ? (
+            <div className="flex items-center gap-1 justify-center mt-1">
+              <Input
+                value={telefoneEdit}
+                onChange={e => setTelefoneEdit(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveTelefone(); if (e.key === 'Escape') setEditingTelefone(false); }}
+                className="text-xs h-7 w-36 text-center"
+                autoFocus
+              />
+              <Button size="icon" variant="ghost" className="h-6 w-6 text-success" onClick={handleSaveTelefone}>
+                <Check size={12} />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => { setEditingTelefone(false); setTelefoneEdit(conversa.telefone); }}>
+                <X size={12} />
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+              <Phone size={12} /> {conversa.telefone}
+              <button onClick={() => { setEditingTelefone(true); setTelefoneEdit(conversa.telefone); }} className="text-muted-foreground hover:text-primary transition-colors">
+                <Edit2 size={11} />
+              </button>
+            </p>
+          )}
         </div>
 
         {/* Editable Tags */}
@@ -193,18 +275,22 @@ export function ClientPanel({ conversa, respostas, onConversaUpdate, onBack }: P
           >
             {pipelineOptions.map(col => <option key={col} value={col}>{col}</option>)}
           </select>
-          <p className="text-[10px] text-muted-foreground">Altera automaticamente no Pipeline</p>
         </div>
 
         {/* Status Bot */}
         <div className="bg-secondary/50 rounded-xl p-3 space-y-2">
-          <label className="text-xs font-semibold text-muted-foreground">Status do Robô</label>
-          <Badge className={cn(
-            'text-xs font-medium',
-            conversa.status_bot ? 'bg-success/10 text-success border border-success/20' : 'bg-destructive/10 text-destructive border border-destructive/20'
-          )}>
-            {conversa.status_bot ? '🟢 Ativo' : '🔴 Pausado'}
-          </Badge>
+          <label className="text-xs font-semibold text-muted-foreground">Status da Deise</label>
+          <div className="flex items-center gap-2">
+            <Badge className={cn(
+              'text-xs font-medium',
+              conversa.status_bot ? 'bg-success/10 text-success border border-success/20' : 'bg-destructive/10 text-destructive border border-destructive/20'
+            )}>
+              {conversa.status_bot ? '🟢 Deise Ativa' : '🔴 Deise Pausada'}
+            </Badge>
+          </div>
+          {conversa.assumido_por && (
+            <p className="text-[10px] text-muted-foreground">Assumido por: <span className="font-bold text-foreground">{conversa.assumido_por}</span></p>
+          )}
         </div>
 
         {/* Quick Replies preview */}
