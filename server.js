@@ -50,6 +50,8 @@ if (process.env.OPENAI_API_KEY) {
 }
 
 const recentSystemMessages = new Map();
+// Debounce map: evita resposta múltipla quando o cliente manda mensagens em rajada
+const debounceTimers = new Map();
 
 // ==========================================
 // FUNÇÃO DE INTELIGÊNCIA ARTIFICIAL (DEISE)
@@ -525,7 +527,24 @@ app.post('/api/webhook', async (req, res) => {
 
     // Deise só responde se: bot ON + estágio Novos + sem humano assumido
     if (texto && conversa.status_bot && conversa.status_kanban === 'Novos' && !conversa.assumido_por) {
-        setTimeout(() => processarIA(remoteJid, texto), 2000);
+        // Debounce: se o cliente mandar várias mensagens rápido, espera 5s sem nova msg antes de responder
+        if (debounceTimers.has(remoteJid)) {
+            clearTimeout(debounceTimers.get(remoteJid));
+            console.log(`⏱️ Debounce resetado para ${remoteJid} — nova mensagem chegou antes do timer.`);
+        }
+        // Acumula as últimas msgs para enviar no contexto completo
+        const timer = setTimeout(async () => {
+            debounceTimers.delete(remoteJid);
+            // Busca a última mensagem do cliente (já pode ter chegado mais com o histórico)
+            const ultimaMsgs = await prisma.mensagem.findMany({
+                where: { conversaId: remoteJid, origem: 'cliente' },
+                orderBy: { criado_em: 'desc' },
+                take: 5
+            });
+            const textoFinal = ultimaMsgs.reverse().map(m => m.texto).filter(Boolean).join(' ');
+            await processarIA(remoteJid, textoFinal || texto);
+        }, 5000);
+        debounceTimers.set(remoteJid, timer);
     } else {
         console.log(`⏸️ IA pausada (Kanban: ${conversa.status_kanban} | Assumido: ${conversa.assumido_por || 'ninguém'})`);
     }

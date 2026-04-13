@@ -177,20 +177,24 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
            </select>
         </div>
 
-        <Button
-          variant={conversa.status_bot ? 'default' : 'outline'}
-          size="sm"
+        <button
+          title={conversa.status_bot ? 'Robô ATIVADO — clique para pausar' : 'Robô PAUSADO — clique para ativar'}
           onClick={handleToggleBot}
           className={cn(
-            'gap-1.5 font-semibold text-xs rounded-lg transition-all',
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border-2 transition-all shrink-0',
             conversa.status_bot
-              ? 'bg-success hover:bg-success/90 text-success-foreground shadow-sm'
-              : 'border-destructive text-destructive hover:bg-destructive/5'
+              ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 hover:bg-emerald-500/20'
+              : 'bg-red-500/10 border-red-400 text-red-500 hover:bg-red-500/20'
           )}
         >
           {conversa.status_bot ? <Power size={14} /> : <PowerOff size={14} />}
-          <span className="hidden sm:inline">{conversa.status_bot ? 'Robô ON' : 'Robô OFF'}</span>
-        </Button>
+          <span className={cn(
+            'leading-none',
+            conversa.status_bot ? 'text-emerald-600' : 'text-red-500'
+          )}>
+            {conversa.status_bot ? 'ON' : 'OFF'}
+          </span>
+        </button>
 
         <Button 
           variant="ghost" 
