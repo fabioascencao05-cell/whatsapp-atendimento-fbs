@@ -25,6 +25,38 @@ const mockTemplates: Template[] = [
   { id: '5', nome: 'Pedido pronto', categoria: 'Produção', texto: 'Ótima notícia, {{nome}}! 🎉 Seu pedido {{pedido}} está pronto! Podemos combinar a entrega ou retirada. O que prefere?' },
 ];
 
+// Templates prontos de Follow-up
+const FOLLOWUP_TEMPLATES = [
+  {
+    grupo: 'Cliente não respondeu depois que chamou',
+    opcoes: [
+      { label: 'Leve / Persuasiva', texto: 'Oi, [Nome]! Tudo bem? Queria te ajudar a garantir as camisetas que você precisa. Me fala se posso te ajudar a avançar no pedido!' },
+      { label: 'Com convite', texto: 'Oi, [Nome]! Sei que a correria é grande, mas queria saber se posso facilitar seu pedido de camisetas. Estou aqui para ajudar!' },
+    ]
+  },
+  {
+    grupo: 'Cliente não respondeu depois do orçamento',
+    opcoes: [
+      { label: 'Leve / Lembrete', texto: 'Oi, [Nome]! Passando para lembrar que nosso prazo é de 4 a 8 dias úteis. Se quiser garantir seu pedido, me avisa que te ajudo a agilizar!' },
+      { label: 'Com incentivo', texto: 'Oi, [Nome]! Se precisar ajustar quantidade, modelo ou cor para caber no seu orçamento, me fala que a gente dá um jeito!' },
+    ]
+  },
+  {
+    grupo: 'Geral — serve para os dois casos',
+    opcoes: [
+      { label: 'Leve / Disponível', texto: 'Oi, [Nome]! Estou aqui para te ajudar a conseguir as camisetas do jeito que você quer. Me avisa se quiser continuar!' },
+      { label: 'Urgência suave', texto: 'Oi, [Nome]! As peças estão saindo rápido e queria garantir que você não perca a sua chance. Posso te ajudar a finalizar?' },
+    ]
+  },
+  {
+    grupo: 'Cliente disse que ia ver',
+    opcoes: [
+      { label: 'Leve / Pergunta', texto: 'Oi, [Nome]! Só passando para saber se deu tempo de analisar o orçamento. Se precisar, posso tirar qualquer dúvida!' },
+      { label: 'Com convite', texto: 'Oi, [Nome]! Quando puder, me fala se posso ajudar a ajustar algo para facilitar seu pedido.' },
+    ]
+  },
+];
+
 const categorias = ['Todos', 'Geral', 'Vendas', 'Produção', 'Financeiro'];
 
 const PRESET_COLORS = [
@@ -248,20 +280,48 @@ export default function SettingsPage() {
         {/* === RESPOSTAS RÁPIDAS === */}
         {tab === 'respostas' && (
           <div className="max-w-3xl space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="text-sm font-bold">Respostas Rápidas</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Use o atalho <span className="font-mono font-semibold text-primary">/</span> no chat para acessar rapidamente
                 </p>
               </div>
-              <Button
-                size="sm"
-                className="gap-1.5 rounded-lg"
-                onClick={() => { setShowNewResposta(true); setEditingResposta(null); setRespostaForm({ atalho: '', texto: '' }); }}
-              >
-                <Plus size={14} /> Nova Resposta
-              </Button>
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 rounded-lg text-xs"
+                  onClick={async () => {
+                    const padroes = [
+                      { atalho: '/fu1a', texto: 'Oi, [Nome]! Tudo bem? Queria te ajudar a garantir as camisetas que você precisa. Me fala se posso te ajudar a avançar no pedido!' },
+                      { atalho: '/fu1b', texto: 'Oi, [Nome]! Sei que a correria é grande, mas queria saber se posso facilitar seu pedido de camisetas. Estou aqui para ajudar!' },
+                      { atalho: '/fu2a', texto: 'Oi, [Nome]! Passando para lembrar que nosso prazo é de 4 a 8 dias úteis. Se quiser garantir seu pedido, me avisa que te ajudo a agilizar!' },
+                      { atalho: '/fu2b', texto: 'Oi, [Nome]! Se precisar ajustar quantidade, modelo ou cor para caber no seu orçamento, me fala que a gente dá um jeito!' },
+                      { atalho: '/fu3a', texto: 'Oi, [Nome]! Estou aqui para te ajudar a conseguir as camisetas do jeito que você quer. Me avisa se quiser continuar!' },
+                      { atalho: '/fu3b', texto: 'Oi, [Nome]! As peças estão saindo rápido e queria garantir que você não perca a sua chance. Posso te ajudar a finalizar?' },
+                      { atalho: '/fu4a', texto: 'Oi, [Nome]! Só passando para saber se deu tempo de analisar o orçamento. Se precisar, posso tirar qualquer dúvida!' },
+                      { atalho: '/fu4b', texto: 'Oi, [Nome]! Quando puder, me fala se posso ajudar a ajustar algo para facilitar seu pedido.' },
+                    ];
+                    for (const p of padroes) {
+                      const jaExiste = respostas.some(r => r.atalho === p.atalho);
+                      if (!jaExiste) {
+                        const nova = await salvarResposta(p);
+                        setRespostas(prev => [...prev, nova]);
+                      }
+                    }
+                  }}
+                >
+                  📋 Importar templates
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 rounded-lg"
+                  onClick={() => { setShowNewResposta(true); setEditingResposta(null); setRespostaForm({ atalho: '', texto: '' }); }}
+                >
+                  <Plus size={14} /> Nova Resposta
+                </Button>
+              </div>
             </div>
 
             {showNewResposta && (
@@ -514,14 +574,38 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] text-muted-foreground mb-1 block">Mensagem Automática (Follow-up)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] text-muted-foreground">Mensagem Automática (Follow-up)</label>
+                    {/* Seletor de templates prontos */}
+                    <div className="relative">
+                      <select
+                        className="text-[10px] font-semibold bg-primary/10 text-primary border border-primary/30 rounded-lg px-2 py-1 pr-5 focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+                        defaultValue=""
+                        onChange={e => {
+                          if (e.target.value) {
+                            setEtiquetaForm(f => ({ ...f, followup_texto: e.target.value }));
+                            e.target.value = ''; // reset select
+                          }
+                        }}
+                      >
+                        <option value="" disabled>📋 Usar template pronto</option>
+                        {FOLLOWUP_TEMPLATES.map(grupo => (
+                          <optgroup key={grupo.grupo} label={grupo.grupo}>
+                            {grupo.opcoes.map((op, i) => (
+                              <option key={i} value={op.texto}>{op.label}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <Textarea
-                    placeholder="Olá! Vi que você não respondeu..."
+                    placeholder="Oi, [Nome]! Passando para saber se posso te ajudar..."
                     value={etiquetaForm.followup_texto}
                     onChange={e => setEtiquetaForm(f => ({ ...f, followup_texto: e.target.value }))}
-                    className="text-sm bg-secondary border-0 min-h-[80px] resize-none"
+                    className="text-sm bg-secondary border-0 min-h-[90px] resize-none"
                   />
-                  <p className="text-[10px] text-muted-foreground mt-1">Essa mensagem será enviada automaticamente após o tempo definido se você marcar essa etiqueta no chat.</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Escolha um template acima e edite como quiser. Use <span className="font-mono font-bold">[Nome]</span> para o nome do cliente.</p>
                 </div>
                 <div>
                   <label className="text-[11px] text-muted-foreground mb-1.5 block">Cor</label>
