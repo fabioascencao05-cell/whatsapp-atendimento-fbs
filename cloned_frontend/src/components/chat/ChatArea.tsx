@@ -119,7 +119,11 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
 
   const removeAttachment = (idx: number) => setAttachments(prev => prev.filter((_, i) => i !== idx));
 
-  const filteredQuick = respostas.filter(r => r.atalho.startsWith(texto));
+  const filteredQuick = respostas.filter(r => {
+    if (!texto.startsWith('/')) return false;
+    const at = r.atalho.startsWith('/') ? r.atalho : '/' + r.atalho;
+    return at.toLowerCase().startsWith(texto.toLowerCase());
+  });
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -347,60 +351,72 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
       )}
 
       {showSchedule && (
-        <div className="border-t bg-card px-4 py-3 flex flex-wrap items-center gap-3 animate-fade-in shadow-inner">
-          <div className="flex items-center gap-2">
-            <CalendarClock size={16} className="text-primary shrink-0" />
-            <span className="text-[10px] font-bold text-muted-foreground uppercase">Agendar:</span>
+        <div className="border-t bg-card px-4 py-3 space-y-3 animate-fade-in shadow-inner">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <CalendarClock size={16} className="text-primary shrink-0" />
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">Agendar disparo para:</span>
+            </div>
+            <Input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="h-8 text-xs w-32 bg-secondary border-0 rounded-lg px-2" />
+            <Input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="h-8 text-xs w-24 bg-secondary border-0 rounded-lg px-2" />
+            
+            <div className="flex items-center gap-2 border-l pl-3 ml-1">
+               <Columns3 size={14} className="text-success" />
+               <select
+                 id="auto-kanban-chat"
+                 className="h-8 text-[10px] font-bold bg-success/10 text-success border-none rounded-lg px-2 focus:ring-1 focus:ring-success outline-none"
+               >
+                 <option value="">Não mover etapa</option>
+                 {['Novos', 'Em Negociação', 'Aguardando Pagamento', 'Pedido Aprovado', 'Pedido Entregue'].map(col => (
+                   <option key={col} value={col}>Mover para: {col}</option>
+                 ))}
+               </select>
+            </div>
           </div>
-          <Input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="h-8 text-xs w-32 bg-secondary border-0 rounded-lg px-2" />
-          <Input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="h-8 text-xs w-24 bg-secondary border-0 rounded-lg px-2" />
-          
-          <div className="flex items-center gap-2 border-l pl-3 ml-1">
-             <Columns3 size={14} className="text-success" />
-             <select
-               id="auto-kanban-chat"
-               className="h-8 text-[10px] font-bold bg-success/10 text-success border-none rounded-lg px-2 focus:ring-1 focus:ring-success outline-none"
-             >
-               <option value="">Não mover etapa</option>
-               {['Novos', 'Em Negociação', 'Aguardando Pagamento', 'Pedido Aprovado', 'Pedido Entregue'].map(col => (
-                 <option key={col} value={col}>Mover para: {col}</option>
-               ))}
-             </select>
+          <div className="flex gap-2">
+            <Textarea
+               value={texto}
+               onChange={e => handleInput(e.target.value)}
+               placeholder="Digite aqui a mensagem que será enviada no futuro..."
+               className="min-h-[60px] text-sm bg-secondary border-0 rounded-xl resize-none"
+            />
           </div>
-
-          <div className="flex-1 flex justify-end gap-2">
+          <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" className="text-[10px] h-7 font-bold uppercase" onClick={() => setShowSchedule(false)}>Cancelar</Button>
-            <Button size="sm" className="text-[10px] h-7 font-bold uppercase" onClick={handleSend}>Confirmar e Agendar</Button>
+            <Button size="sm" className="text-[10px] h-7 font-bold uppercase gap-1" onClick={handleSend} disabled={!texto.trim()}>
+              <CalendarClock size={14} /> Confirmar e Agendar
+            </Button>
           </div>
         </div>
       )}
 
       {/* Input bar */}
-      <div className="flex items-center gap-2 px-3 py-3 border-t bg-card">
-        <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={handleImageSelect} />
-        <input ref={videoInputRef} type="file" accept="video/*" multiple hidden onChange={handleVideoSelect} />
+      {!showSchedule && (
+        <div className="flex items-center gap-2 px-3 py-3 border-t bg-card">
+          <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={handleImageSelect} />
+          <input ref={videoInputRef} type="file" accept="video/*" multiple hidden onChange={handleVideoSelect} />
 
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-info shrink-0 h-9 w-9" onClick={() => imageInputRef.current?.click()}>
-          <Image size={18} />
-        </Button>
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary shrink-0 h-9 w-9" onClick={() => videoInputRef.current?.click()}>
-          <Video size={18} />
-        </Button>
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground shrink-0 h-9 w-9" onClick={() => document.getElementById('file-attach')?.click()}>
-          <Paperclip size={18} />
-        </Button>
-        <input id="file-attach" type="file" hidden onChange={(e) => {
-          const files = e.target.files;
-          if (files) Array.from(files).forEach(f => setAttachments(prev => [...prev, { name: f.name, type: 'file' }]));
-        }} />
+          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-info shrink-0 h-9 w-9" onClick={() => imageInputRef.current?.click()}>
+            <Image size={18} />
+          </Button>
+          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary shrink-0 h-9 w-9" onClick={() => videoInputRef.current?.click()}>
+            <Video size={18} />
+          </Button>
+          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground shrink-0 h-9 w-9" onClick={() => document.getElementById('file-attach')?.click()}>
+            <Paperclip size={18} />
+          </Button>
+          <input id="file-attach" type="file" hidden onChange={(e) => {
+            const files = e.target.files;
+            if (files) Array.from(files).forEach(f => setAttachments(prev => [...prev, { name: f.name, type: 'file' }]));
+          }} />
 
-        <Input
-          value={texto}
-          onChange={e => handleInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-          placeholder='Mensagem... (use "/" para atalhos)'
-          className="flex-1 bg-secondary border-0 h-10 rounded-xl"
-        />
+          <Input
+            value={texto}
+            onChange={e => handleInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+            placeholder='Mensagem... (use "/" para atalhos)'
+            className="flex-1 bg-secondary border-0 h-10 rounded-xl"
+          />
 
         <Button
           variant="ghost"
@@ -420,6 +436,7 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
           <Send size={16} className="text-primary-foreground" />
         </Button>
       </div>
+      )}
     </div>
   );
 }
