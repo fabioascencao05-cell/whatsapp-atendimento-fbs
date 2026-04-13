@@ -128,15 +128,20 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b bg-card shadow-sm">
+      {/* Header Row 1 — Identidade + Ações rápidas */}
+      <div className="flex items-center gap-2 px-3 py-2.5 border-b bg-card shadow-sm">
         {onBack && (
-          <Button variant="ghost" size="icon" className="shrink-0 lg:hidden h-8 w-8" onClick={onBack}>
-            <ArrowLeft size={18} />
-          </Button>
+          <button
+            className="shrink-0 lg:hidden h-9 w-9 flex items-center justify-center rounded-xl hover:bg-secondary active:scale-90 transition-all"
+            onClick={onBack}
+          >
+            <ArrowLeft size={20} />
+          </button>
         )}
+
+        {/* Avatar */}
         <div
-          className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0 cursor-pointer overflow-hidden"
+          className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0 cursor-pointer overflow-hidden ring-2 ring-primary/20 active:scale-95 transition-all"
           onClick={onOpenPanel}
         >
           {conversa.profile_pic_url ? (
@@ -145,69 +150,67 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
             conversa.nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
           )}
         </div>
+
+        {/* Nome + tel */}
         <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpenPanel}>
-          <p className="text-sm font-semibold truncate">{conversa.nome}</p>
-          <p className="text-xs text-muted-foreground">{conversa.telefone}</p>
+          <p className="text-sm font-bold truncate leading-tight">{conversa.nome}</p>
+          <p className="text-[11px] text-muted-foreground leading-tight">{conversa.telefone}</p>
         </div>
 
-        <div className="flex items-center gap-2">
-           <div className="relative">
-             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">R$</span>
-             <input
-               type="number"
-               defaultValue={conversa.valor_conversa || 0}
-               onBlur={async (e) => {
-                 const val = parseFloat(e.target.value) || 0;
-                 await atualizarValor(conversa.id, val);
-                 onConversaUpdate({ ...conversa, valor_conversa: val });
-                 toast.success('Valor atualizado');
-               }}
-               className="w-20 pl-7 pr-2 py-1.5 text-xs font-bold border rounded-lg bg-secondary focus:ring-1 focus:ring-primary outline-none"
-             />
-           </div>
-
-           <select
-             value={conversa.status_kanban}
-             onChange={e => handleKanbanChange(e.target.value)}
-             className="text-xs border rounded-lg px-2.5 py-1.5 bg-secondary text-secondary-foreground font-medium focus:ring-2 focus:ring-ring focus:outline-none"
-           >
-             {['Novos', 'Em Negociação', 'Aguardando Pagamento', 'Pedido Aprovado', 'Pedido Entregue'].map(col => (
-               <option key={col} value={col}>{col}</option>
-             ))}
-           </select>
-        </div>
-
+        {/* Bot toggle — sempre visível */}
         <button
-          title={conversa.status_bot ? 'Robô ATIVADO — clique para pausar' : 'Robô PAUSADO — clique para ativar'}
+          title={conversa.status_bot ? 'Robô ATIVADO — toque para pausar' : 'Robô PAUSADO — toque para ativar'}
           onClick={handleToggleBot}
           className={cn(
-            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border-2 transition-all shrink-0',
+            'flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-black border-2 transition-all shrink-0 active:scale-90',
             conversa.status_bot
               ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 hover:bg-emerald-500/20'
               : 'bg-red-500/10 border-red-400 text-red-500 hover:bg-red-500/20'
           )}
         >
           {conversa.status_bot ? <Power size={14} /> : <PowerOff size={14} />}
-          <span className={cn(
-            'leading-none',
-            conversa.status_bot ? 'text-emerald-600' : 'text-red-500'
-          )}>
-            {conversa.status_bot ? 'ON' : 'OFF'}
-          </span>
+          <span>{conversa.status_bot ? 'ON' : 'OFF'}</span>
         </button>
 
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="text-destructive/70 hover:text-destructive hover:bg-destructive/10 h-8 w-8"
+        {/* Excluir */}
+        <button
+          className="text-destructive/60 hover:text-destructive h-9 w-9 flex items-center justify-center rounded-xl hover:bg-destructive/10 transition-all active:scale-90 shrink-0"
           onClick={() => {
-            if (window.confirm(`Excluir permanentemente a conversa com ${conversa.nome}? Esta ação não pode ser desfeita.`)) {
+            if (window.confirm(`Excluir conversa com ${conversa.nome}?`)) {
               handleDelete();
             }
           }}
         >
           <Trash2 size={16} />
-        </Button>
+        </button>
+      </div>
+
+      {/* Header Row 2 — Etapa e Valor (scrollável no mobile) */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b bg-card/60 overflow-x-auto no-scrollbar">
+        <div className="relative shrink-0">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">R$</span>
+          <input
+            type="number"
+            defaultValue={conversa.valor_conversa || 0}
+            onBlur={async (e) => {
+              const val = parseFloat(e.target.value) || 0;
+              await atualizarValor(conversa.id, val);
+              onConversaUpdate({ ...conversa, valor_conversa: val });
+              toast.success('Valor atualizado');
+            }}
+            className="w-20 pl-6 pr-2 py-1.5 text-xs font-bold border rounded-lg bg-secondary focus:ring-1 focus:ring-primary outline-none shrink-0"
+          />
+        </div>
+
+        <select
+          value={conversa.status_kanban}
+          onChange={e => handleKanbanChange(e.target.value)}
+          className="flex-1 min-w-0 text-xs border rounded-lg px-2 py-1.5 bg-secondary text-secondary-foreground font-medium focus:ring-2 focus:ring-ring focus:outline-none"
+        >
+          {['Novos', 'Em Negociação', 'Aguardando Pagamento', 'Pedido Aprovado', 'Pedido Entregue'].map(col => (
+            <option key={col} value={col}>{col}</option>
+          ))}
+        </select>
       </div>
       
       {/* Etiqueta Bar */}

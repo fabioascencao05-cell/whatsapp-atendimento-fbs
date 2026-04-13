@@ -46,11 +46,12 @@ const App = () => {
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <div className="flex h-dvh w-full overflow-hidden">
-                <div className="hidden lg:flex">
+              <div className="flex h-dvh w-full overflow-hidden bg-background">
+                <div className="hidden lg:flex shrink-0">
                   <AppNav />
                 </div>
-                <div className="flex-1 min-w-0 relative pb-16 lg:pb-0">
+                {/* Conteúdo: no mobile, padding-bottom reserva espaço do BottomNav (60px) */}
+                <div className="flex-1 min-w-0 flex flex-col overflow-hidden pb-[60px] lg:pb-0">
                   <Routes>
                     <Route path="/" element={<ChatPage />} />
                     <Route path="/kanban" element={<KanbanPage />} />
