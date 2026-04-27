@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const bodyParser = require('body-parser');
@@ -203,6 +203,13 @@ Polo Piquet Feminina
 - modelo social feminino
 - ideal para empresa
 - mesmas cores do algodão
+
+Camiseta manga longa, com gola redonda
+- Modelo: Gola Careca
+- Tamanhos: P | M | G | GG | EG
+- Tecido: 100% algodão, exceto cinza mescla, que é 88% algodão e 12% poliéster.
+- Cores: Amarelo, Azul Marinho, Azul Royal, Azul Turquesa, Bordô, Branco, Cinza Mescla, Cinza Grafite, Laranja, Preto, Verde Bandeira, Verde Limão, Verde Musgo, Vermelho
+
 
 🎨 CORES DISPONÍVEIS
 
@@ -1192,3 +1199,4 @@ app.get('*', (req, res) => {
 });
 
 app.listen(3000, () => console.log('🚀 FBS CRM rodando na porta 3000'));
+

@@ -2,65 +2,66 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 @layer base {
   :root {
-    /* WhatsApp Dark Theme */
-    --background: 199 35% 11%;
-    --foreground: 200 20% 93%;
+    /* Premium Modern Dark Theme - Melhorado */
+    --background: 220 25% 7%;
+    --foreground: 210 20% 98%;
 
-    --card: 200 25% 14%;
-    --card-foreground: 200 20% 93%;
+    --card: 220 20% 11%;
+    --card-foreground: 210 20% 98%;
 
-    --popover: 200 25% 14%;
-    --popover-foreground: 200 20% 93%;
+    --popover: 220 20% 11%;
+    --popover-foreground: 210 20% 98%;
 
-    --primary: 152 69% 49%;
-    --primary-foreground: 199 35% 8%;
+    --primary: 155 80% 50%;
+    --primary-foreground: 220 25% 7%;
 
-    --secondary: 200 20% 18%;
-    --secondary-foreground: 200 15% 80%;
+    --secondary: 220 15% 16%;
+    --secondary-foreground: 210 20% 85%;
 
-    --muted: 200 15% 22%;
-    --muted-foreground: 200 10% 56%;
+    --muted: 220 15% 16%;
+    --muted-foreground: 215 15% 65%;
 
-    --accent: 152 69% 49%;
-    --accent-foreground: 199 35% 8%;
+    --accent: 155 80% 50%;
+    --accent-foreground: 220 25% 7%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 69% 49%;
-    --success-foreground: 199 35% 8%;
+    --success: 155 80% 50%;
+    --success-foreground: 220 25% 7%;
 
-    --warning: 38 92% 50%;
+    --warning: 38 92% 55%;
     --warning-foreground: 0 0% 100%;
 
-    --info: 199 89% 65%;
+    --info: 210 90% 65%;
     --info-foreground: 0 0% 100%;
 
-    --nav: 199 40% 8%;
-    --nav-foreground: 200 10% 56%;
-    --nav-active: 152 69% 49%;
+    --nav: 220 20% 9%;
+    --nav-foreground: 215 15% 65%;
+    --nav-active: 155 80% 50%;
 
-    --bubble-client: 200 25% 17%;
-    --bubble-bot: 152 25% 18%;
-    --bubble-store: 199 30% 20%;
+    --bubble-client: 220 20% 15%;
+    --bubble-bot: 155 40% 18%;
+    --bubble-store: 220 30% 20%;
 
-    --chat-bg: 199 35% 9%;
+    --chat-bg: 220 25% 7%;
 
-    --border: 200 15% 24%;
-    --input: 200 15% 24%;
-    --ring: 152 69% 49%;
-    --radius: 0.625rem;
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 155 80% 50%;
+    --radius: 0.8rem;
 
-    --sidebar-background: 199 40% 8%;
-    --sidebar-foreground: 200 10% 56%;
-    --sidebar-primary: 152 69% 49%;
-    --sidebar-primary-foreground: 199 35% 8%;
-    --sidebar-accent: 200 25% 15%;
-    --sidebar-accent-foreground: 200 20% 93%;
-    --sidebar-border: 200 15% 18%;
-    --sidebar-ring: 152 69% 49%;
+    --sidebar-background: 220 20% 9%;
+    --sidebar-foreground: 215 15% 65%;
+    --sidebar-primary: 155 80% 50%;
+    --sidebar-primary-foreground: 220 25% 7%;
+    --sidebar-accent: 220 25% 15%;
+    --sidebar-accent-foreground: 210 20% 98%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 155 80% 50%;
   }
 }
 
@@ -83,24 +84,35 @@
     scrollbar-color: hsl(var(--muted)) transparent;
   }
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
+    width: 6px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.2);
+    background-color: hsl(var(--muted-foreground) / 0.25);
     border-radius: 20px;
+    transition: background-color 0.2s ease;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.4);
   }
   .chat-pattern {
     background-color: hsl(var(--chat-bg));
-    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2325D366' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2325D366' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
   }
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .touch-active:active {
-    transform: scale(0.97);
-    opacity: 0.9;
+    transform: scale(0.96);
+    opacity: 0.85;
+    transition: transform 0.1s, opacity 0.1s;
+  }
+  .glassmorphism {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 }

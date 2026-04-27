@@ -1,13 +1,27 @@
-import { useState, useEffect, useMemo } from 'react';
-import { CalendarClock, Plus, Send, Trash2, X, Clock, CheckCircle2, XCircle, User, Search, Filter, Bell } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import { fetchConversas, fetchFollowUps, criarFollowUp, cancelarFollowUp, deletarFollowUp, fetchRespostas } from '@/services/api';
-import type { Conversa, RespostaRapida } from '@/types/crm';
-import { toast } from 'sonner';
+import { useState, useEffect, useMemo } from "react";
+import { CalendarClock, Plus, Trash2, Send, Clock, User, CheckCircle2, XCircle, AlertCircle, Edit2, ArrowRight, GitBranch, Filter, RefreshCw } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { fetchConversas, fetchFollowUps, criarFollowUp, cancelarFollowUp, deletarFollowUp } from "@/services/api";
+import type { Conversa } from "@/types/crm";
 
 interface FollowUpItem {
   id: string;
@@ -17,306 +31,432 @@ interface FollowUpItem {
   status: string;
   tentativas: number;
   criado_em: string;
-  enviado_em: string | null;
-  conversa: {
+  enviado_em?: string;
+  conversa?: {
     nome: string;
     telefone: string;
-    profile_pic_url: string | null;
+    profile_pic_url?: string;
     status_kanban: string;
   };
 }
 
-function formatDateTime(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
-}
-
-function isOverdue(dateStr: string) {
-  return new Date(dateStr) < new Date();
-}
+// ===== ETAPAS DO FUNIL (editáveis via UI) =====
+const DEFAULT_ETAPAS = [
+  { id: "novos", nome: "Novos", cor: "#818cf8", emoji: "🆕", prazo: "Auto", mensagem: "Bot Deise responde automaticamente" },
+  { id: "em_negociacao", nome: "Em Negociação", cor: "#f59e0b", emoji: "🤝", prazo: "Manual", mensagem: "Humano assumiu o atendimento" },
+  { id: "aguardando_pagamento", nome: "Aguardando Pagamento", cor: "#8b5cf6", emoji: "💰", prazo: "48h", mensagem: "" },
+  { id: "pedido_aprovado", nome: "Pedido Aprovado", cor: "#10b981", emoji: "✅", prazo: "—", mensagem: "" },
+  { id: "pedido_entregue", nome: "Pedido Entregue", cor: "#22c55e", emoji: "🎉", prazo: "—", mensagem: "" },
+];
 
 export default function FollowUpPage() {
-  const [followups, setFollowups] = useState<FollowUpItem[]>([]);
   const [conversas, setConversas] = useState<Conversa[]>([]);
-  const [respostas, setRespostas] = useState<RespostaRapida[]>([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<'todos' | 'pendente' | 'enviado' | 'cancelado'>('todos');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [followups, setFollowups] = useState<FollowUpItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filtroStatus, setFiltroStatus] = useState<string>("todos");
 
-  // Form
-  const [selectedConversaId, setSelectedConversaId] = useState('');
-  const [texto, setTexto] = useState('');
-  const [agendadoPara, setAgendadoPara] = useState('');
-
-  const loadData = async () => {
-    const [fups, convs, resps] = await Promise.all([fetchFollowUps(), fetchConversas(), fetchRespostas()]);
-    setFollowups(fups);
-    setConversas(convs);
-    setRespostas(resps);
-  };
+  // Modal novo follow-up
+  const [novoOpen, setNovoOpen] = useState(false);
+  const [novoConversaId, setNovoConversaId] = useState("");
+  const [novoTexto, setNovoTexto] = useState("");
+  const [novoHoras, setNovoHoras] = useState("24");
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 10000);
-    return () => clearInterval(interval);
+    carregarDados();
   }, []);
 
-  const filtered = useMemo(() => {
-    let list = followups;
-    if (filterStatus !== 'todos') {
-      list = list.filter(f => f.status === filterStatus);
-    }
-    if (searchTerm) {
-      const q = searchTerm.toLowerCase();
-      list = list.filter(f => f.conversa.nome.toLowerCase().includes(q) || f.texto.toLowerCase().includes(q));
-    }
-    return list;
-  }, [followups, filterStatus, searchTerm]);
-
-  const pendentes = followups.filter(f => f.status === 'pendente').length;
-  const enviados = followups.filter(f => f.status === 'enviado').length;
-  const atrasados = followups.filter(f => f.status === 'pendente' && isOverdue(f.agendado_para)).length;
-
-  const handleCreate = async () => {
-    if (!selectedConversaId || !texto.trim() || !agendadoPara) {
-      toast.error('Preencha todos os campos');
-      return;
-    }
+  async function carregarDados() {
+    setLoading(true);
     try {
-      await criarFollowUp({ conversaId: selectedConversaId, texto: texto.trim(), agendado_para: agendadoPara });
-      toast.success('Follow-up agendado!');
-      setShowCreate(false);
-      setSelectedConversaId('');
-      setTexto('');
-      setAgendadoPara('');
-      loadData();
-    } catch { toast.error('Erro ao agendar'); }
-  };
+      const [c, f] = await Promise.all([fetchConversas(), fetchFollowUps()]);
+      setConversas(c);
+      setFollowups(f as FollowUpItem[]);
+    } catch (err) {
+      console.error("Erro ao carregar:", err);
+    }
+    setLoading(false);
+  }
 
-  const handleCancel = async (id: string) => {
-    if (!confirm('Cancelar este follow-up?')) return;
-    await cancelarFollowUp(id);
-    toast.success('Follow-up cancelado');
-    loadData();
-  };
+  // Estatísticas
+  const stats = useMemo(() => {
+    const pendentes = followups.filter(f => f.status === "pendente").length;
+    const enviados = followups.filter(f => f.status === "enviado").length;
+    const agora = new Date();
+    const atrasados = followups.filter(f => f.status === "pendente" && new Date(f.agendado_para) < agora).length;
+    return { pendentes, enviados, atrasados };
+  }, [followups]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Excluir permanentemente?')) return;
-    await deletarFollowUp(id);
-    toast.success('Follow-up excluído');
-    loadData();
-  };
+  // Leads agrupados por etapa do kanban
+  const leadsPorEtapa = useMemo(() => {
+    const mapa: Record<string, Conversa[]> = {};
+    conversas.forEach(c => {
+      const etapa = c.status_kanban || "Novos";
+      if (!mapa[etapa]) mapa[etapa] = [];
+      mapa[etapa].push(c);
+    });
+    return mapa;
+  }, [conversas]);
 
-  const statusConfig = {
-    pendente: { icon: Clock, color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Pendente' },
-    enviado: { icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', label: 'Enviado' },
-    cancelado: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20', label: 'Cancelado' },
-  };
+  // Follow-ups filtrados
+  const followupsFiltrados = useMemo(() => {
+    if (filtroStatus === "todos") return followups;
+    return followups.filter(f => f.status === filtroStatus);
+  }, [followups, filtroStatus]);
 
-  // Min date for the date picker (now)
-  const minDate = new Date().toISOString().slice(0, 16);
+  async function handleCriarFollowUp() {
+    if (!novoConversaId || !novoTexto) return;
+    const horasNum = parseInt(novoHoras) || 24;
+    const agendado = new Date(Date.now() + horasNum * 60 * 60 * 1000).toISOString();
+    try {
+      await criarFollowUp({ conversaId: novoConversaId, texto: novoTexto, agendado_para: agendado });
+      setNovoOpen(false);
+      setNovoConversaId("");
+      setNovoTexto("");
+      setNovoHoras("24");
+      carregarDados();
+    } catch (err) {
+      console.error("Erro ao criar follow-up:", err);
+    }
+  }
+
+  async function handleCancelar(id: string) {
+    try {
+      await cancelarFollowUp(id);
+      carregarDados();
+    } catch (err) {
+      console.error("Erro ao cancelar:", err);
+    }
+  }
+
+  async function handleDeletar(id: string) {
+    try {
+      await deletarFollowUp(id);
+      carregarDados();
+    } catch (err) {
+      console.error("Erro ao deletar:", err);
+    }
+  }
+
+  function formatarData(iso: string) {
+    const d = new Date(iso);
+    const agora = new Date();
+    const diff = d.getTime() - agora.getTime();
+    const horas = Math.round(diff / (1000 * 60 * 60));
+    const minutos = Math.round(diff / (1000 * 60));
+
+    if (diff < 0) {
+      const atraso = Math.abs(horas);
+      return atraso > 24 ? `${Math.round(atraso / 24)}d atrasado` : `${atraso}h atrasado`;
+    }
+    if (minutos < 60) return `em ${minutos}min`;
+    if (horas < 24) return `em ${horas}h`;
+    return `em ${Math.round(horas / 24)}d`;
+  }
+
+  // Mapear status_kanban para cor
+  function corEtapa(status: string) {
+    const mapa: Record<string, string> = {
+      "Novos": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
+      "Em Negociação": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+      "Aguardando Pagamento": "bg-violet-500/15 text-violet-400 border-violet-500/30",
+      "Pedido Aprovado": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+      "Pedido Entregue": "bg-green-500/15 text-green-400 border-green-500/30",
+      "Fechados": "bg-green-500/15 text-green-400 border-green-500/30",
+      "Finalizados": "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+    };
+    return mapa[status] || "bg-muted/30 text-muted-foreground border-border";
+  }
+
+  function emojiEtapa(status: string) {
+    const mapa: Record<string, string> = {
+      "Novos": "🆕", "Em Negociação": "🤝", "Aguardando Pagamento": "💰",
+      "Pedido Aprovado": "✅", "Pedido Entregue": "🎉", "Fechados": "🏁", "Finalizados": "📦"
+    };
+    return mapa[status] || "📋";
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-full bg-background p-6 overflow-y-auto scrollbar-thin">
-      <div className="max-w-4xl mx-auto w-full space-y-6">
-        {/* Header */}
+    <div className="flex-1 flex flex-col overflow-hidden bg-background">
+
+      {/* Header */}
+      <header className="px-6 py-5 border-b border-border/50 bg-card/30">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <CalendarClock className="text-primary" /> Central de Follow-Up
-            </h1>
-            <p className="text-sm text-muted-foreground">Agende lembretes para nunca perder uma venda.</p>
-          </div>
-          <Button onClick={() => setShowCreate(!showCreate)} className="gap-2 rounded-xl shadow-lg shadow-primary/20">
-            {showCreate ? <X size={16} /> : <Plus size={16} />}
-            {showCreate ? 'Cancelar' : 'Agendar Follow-Up'}
-          </Button>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-card rounded-2xl border p-4 text-center">
-            <p className="text-2xl font-bold text-amber-500">{pendentes}</p>
-            <p className="text-[10px] text-muted-foreground font-bold uppercase">Pendentes</p>
-          </div>
-          <div className="bg-card rounded-2xl border p-4 text-center">
-            <p className="text-2xl font-bold text-emerald-500">{enviados}</p>
-            <p className="text-[10px] text-muted-foreground font-bold uppercase">Enviados</p>
-          </div>
-          <div className="bg-card rounded-2xl border p-4 text-center">
-            <p className={cn("text-2xl font-bold", atrasados > 0 ? "text-red-500" : "text-muted-foreground")}>{atrasados}</p>
-            <p className="text-[10px] text-muted-foreground font-bold uppercase">Atrasados</p>
-          </div>
-        </div>
-
-        {/* Create Form */}
-        {showCreate && (
-          <div className="bg-card rounded-2xl border p-6 shadow-sm space-y-4 animate-in slide-in-from-top-2">
-            <h3 className="text-sm font-bold flex items-center gap-2">
-              <Bell size={16} className="text-primary" /> Novo Agendamento
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase">Cliente</label>
-                <select
-                  value={selectedConversaId}
-                  onChange={e => setSelectedConversaId(e.target.value)}
-                  className="w-full text-xs border rounded-xl px-3 py-2.5 bg-secondary text-foreground focus:ring-2 focus:ring-primary focus:outline-none"
-                >
-                  <option value="">Selecione um cliente...</option>
-                  {conversas.map(c => (
-                    <option key={c.id} value={c.id}>{c.nome} — {c.telefone}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase">Data e Hora do Disparo</label>
-                <Input
-                  type="datetime-local"
-                  value={agendadoPara}
-                  onChange={e => setAgendadoPara(e.target.value)}
-                  min={minDate}
-                  className="text-xs bg-secondary border-0 rounded-xl"
-                />
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+              <GitBranch size={20} className="text-primary" />
             </div>
-
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase">Mensagem</label>
-                <select
-                  onChange={e => {
-                    if (e.target.value) setTexto(e.target.value);
-                    e.target.selectedIndex = 0;
-                  }}
-                  className="text-[10px] font-bold bg-primary/10 text-primary border-none rounded-lg px-2 py-1 cursor-pointer"
-                >
-                  <option value="">Puxar template...</option>
-                  {respostas.map(r => (
-                    <option key={r.id} value={r.texto}>{r.atalho}</option>
-                  ))}
-                </select>
-              </div>
-              <Textarea
-                placeholder="Oi! Passando pra saber se você ainda tem interesse..."
-                value={texto}
-                onChange={e => setTexto(e.target.value)}
-                className="min-h-[100px] text-sm bg-secondary border-0 rounded-2xl resize-none"
-              />
+            <div>
+              <h1 className="text-lg font-bold text-foreground">Central de Follow-Up</h1>
+              <p className="text-xs text-muted-foreground">Funil inteligente • Acompanhe cada lead</p>
             </div>
+          </div>
 
-            <Button onClick={handleCreate} className="w-full gap-2 rounded-xl h-11">
-              <Send size={16} /> Agendar Follow-Up
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={carregarDados} className="gap-1.5">
+              <RefreshCw size={14} /> Atualizar
             </Button>
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-48">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome ou texto..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="pl-9 text-xs rounded-xl bg-secondary border-0"
-            />
-          </div>
-          <div className="flex gap-1.5">
-            {(['todos', 'pendente', 'enviado', 'cancelado'] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                className={cn(
-                  'text-[10px] font-bold uppercase px-3 py-1.5 rounded-lg border transition-all',
-                  filterStatus === s ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary text-muted-foreground border-transparent hover:bg-secondary/80'
-                )}
-              >
-                {s === 'todos' ? 'Todos' : statusConfig[s].label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="space-y-3">
-          {filtered.length === 0 && (
-            <div className="text-center py-16 text-muted-foreground">
-              <CalendarClock size={40} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium">Nenhum follow-up {filterStatus !== 'todos' ? statusConfig[filterStatus]?.label?.toLowerCase() : ''} encontrado</p>
-              <p className="text-xs mt-1">Clique em "Agendar Follow-Up" para criar o primeiro!</p>
-            </div>
-          )}
-
-          {filtered.map(f => {
-            const sc = statusConfig[f.status as keyof typeof statusConfig] || statusConfig.pendente;
-            const Icon = sc.icon;
-            const overdue = f.status === 'pendente' && isOverdue(f.agendado_para);
-
-            return (
-              <div
-                key={f.id}
-                className={cn(
-                  'bg-card rounded-2xl border p-4 shadow-sm transition-all hover:shadow-md',
-                  overdue && 'border-red-500/30 bg-red-500/5'
-                )}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Avatar */}
-                  {f.conversa.profile_pic_url ? (
-                    <img src={f.conversa.profile_pic_url} className="w-10 h-10 rounded-full ring-2 ring-primary/20 object-cover shrink-0" />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0 ring-2 ring-primary/20">
-                      {f.conversa.nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-bold">{f.conversa.nome}</p>
-                        <p className="text-[10px] text-muted-foreground">{f.conversa.telefone} • {f.conversa.status_kanban}</p>
-                      </div>
-                      <Badge className={cn('text-[10px] font-bold gap-1', sc.bg, sc.color, sc.border, 'border')}>
-                        <Icon size={10} />
-                        {overdue ? 'Atrasado!' : sc.label}
-                      </Badge>
-                    </div>
-
-                    <p className="text-xs text-foreground/80 bg-secondary/50 p-2.5 rounded-xl italic">"{f.texto}"</p>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <CalendarClock size={10} /> Disparo: <span className={cn("font-bold", overdue && "text-red-500")}>{formatDateTime(f.agendado_para)}</span>
-                        </span>
-                        {f.enviado_em && (
-                          <span className="flex items-center gap-1">
-                            <CheckCircle2 size={10} className="text-emerald-500" /> Enviado: {formatDateTime(f.enviado_em)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex gap-1">
-                        {f.status === 'pendente' && (
-                          <button onClick={() => handleCancel(f.id)} className="text-[10px] font-bold text-amber-500 hover:text-amber-400 transition-colors px-2 py-1 rounded-lg hover:bg-amber-500/10">
-                            Cancelar
-                          </button>
-                        )}
-                        <button onClick={() => handleDelete(f.id)} className="text-[10px] font-bold text-destructive hover:text-destructive/80 transition-colors px-2 py-1 rounded-lg hover:bg-destructive/10">
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
+            <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1.5">
+                  <Plus size={14} /> Novo Follow-Up
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Agendar Follow-Up</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Contato</label>
+                    <Select value={novoConversaId} onValueChange={setNovoConversaId}>
+                      <SelectTrigger><SelectValue placeholder="Selecione um contato..." /></SelectTrigger>
+                      <SelectContent>
+                        {conversas.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.nome} — {c.telefone}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Mensagem</label>
+                    <Textarea
+                      value={novoTexto}
+                      onChange={e => setNovoTexto(e.target.value)}
+                      placeholder="Ex: Oi! Conseguiu decidir sobre as camisetas?"
+                      rows={3}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Enviar em (horas)</label>
+                    <div className="flex gap-2">
+                      {["1", "2", "6", "12", "24", "48", "72"].map(h => (
+                        <Button
+                          key={h}
+                          size="sm"
+                          variant={novoHoras === h ? "default" : "outline"}
+                          onClick={() => setNovoHoras(h)}
+                          className="flex-1 text-xs"
+                        >
+                          {h}h
+                        </Button>
+                      ))}
                     </div>
                   </div>
+                  <Button onClick={handleCriarFollowUp} className="w-full gap-2" disabled={!novoConversaId || !novoTexto}>
+                    <Send size={14} /> Agendar Envio
+                  </Button>
                 </div>
-              </div>
-            );
-          })}
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-      </div>
+      </header>
+
+      <ScrollArea className="flex-1">
+        <div className="p-6 space-y-6">
+
+          {/* Cards de Resumo */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="p-4">
+                <p className="text-2xl font-bold text-primary">{stats.pendentes}</p>
+                <p className="text-xs text-muted-foreground mt-1">Pendentes</p>
+              </CardContent>
+            </Card>
+            <Card className="border-emerald-500/20 bg-emerald-500/5">
+              <CardContent className="p-4">
+                <p className="text-2xl font-bold text-emerald-400">{stats.enviados}</p>
+                <p className="text-xs text-muted-foreground mt-1">Enviados</p>
+              </CardContent>
+            </Card>
+            <Card className={`${stats.atrasados > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-border'}`}>
+              <CardContent className="p-4">
+                <p className={`text-2xl font-bold ${stats.atrasados > 0 ? 'text-red-400' : 'text-muted-foreground'}`}>{stats.atrasados}</p>
+                <p className="text-xs text-muted-foreground mt-1">Atrasados</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-2xl font-bold text-foreground">{conversas.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">Total de Leads</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* FLUXO DO FUNIL — mostra leads em cada etapa */}
+          <div>
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+              <GitBranch size={14} /> Fluxo do Funil
+            </h2>
+            <div className="space-y-2.5">
+              {Object.entries(leadsPorEtapa).map(([etapa, leads], idx) => (
+                <Card key={etapa} className="overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-3 border-b border-border/30">
+                    <span className="text-base">{emojiEtapa(etapa)}</span>
+                    <h3 className="font-semibold text-sm text-foreground flex-1">{etapa}</h3>
+                    <Badge variant="secondary" className={corEtapa(etapa)}>
+                      {leads.length} lead{leads.length !== 1 ? "s" : ""}
+                    </Badge>
+                  </div>
+                  {leads.length > 0 && (
+                    <div className="p-3 flex flex-wrap gap-2">
+                      {leads.slice(0, 10).map(lead => (
+                        <div key={lead.id} className="flex items-center gap-2 bg-muted/20 border border-border/30 rounded-lg px-3 py-1.5 text-xs group hover:bg-muted/40 transition-colors">
+                          {lead.profile_pic_url ? (
+                            <img src={lead.profile_pic_url} className="w-5 h-5 rounded-full object-cover" alt="" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold text-muted-foreground">
+                              {lead.nome?.charAt(0) || "?"}
+                            </div>
+                          )}
+                          <span className="text-foreground/80">{lead.nome}</span>
+                          {lead.proximo_followup && (
+                            <span className="text-primary/60 text-[10px]">
+                              ⏰ {formatarData(lead.proximo_followup)}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                      {leads.length > 10 && (
+                        <span className="text-[10px] text-muted-foreground px-2 py-1">
+                          +{leads.length - 10} mais
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* FOLLOW-UPS AGENDADOS */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <CalendarClock size={14} /> Follow-Ups Agendados
+              </h2>
+              <div className="flex gap-1">
+                {["todos", "pendente", "enviado", "cancelado"].map(f => (
+                  <Button
+                    key={f}
+                    size="sm"
+                    variant={filtroStatus === f ? "default" : "ghost"}
+                    onClick={() => setFiltroStatus(f)}
+                    className="text-xs h-7 px-2.5"
+                  >
+                    {f === "todos" ? "Todos" : f.charAt(0).toUpperCase() + f.slice(1)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {followupsFiltrados.length === 0 ? (
+              <Card className="border-dashed">
+                <CardContent className="p-8 text-center text-muted-foreground text-sm">
+                  <CalendarClock className="mx-auto mb-3 opacity-30" size={40} />
+                  {filtroStatus === "todos"
+                    ? "Nenhum follow-up agendado. Clique em \"Novo Follow-Up\" para criar."
+                    : `Nenhum follow-up com status "${filtroStatus}".`
+                  }
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {followupsFiltrados.map(fu => {
+                  const isAtrasado = fu.status === "pendente" && new Date(fu.agendado_para) < new Date();
+                  return (
+                    <Card key={fu.id} className={`transition-colors ${isAtrasado ? 'border-red-500/30' : ''}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          {/* Ícone de status */}
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-none ${
+                            fu.status === "enviado" ? "bg-emerald-500/15 text-emerald-400" :
+                            fu.status === "cancelado" ? "bg-zinc-500/15 text-zinc-400" :
+                            isAtrasado ? "bg-red-500/15 text-red-400" :
+                            "bg-primary/15 text-primary"
+                          }`}>
+                            {fu.status === "enviado" ? <CheckCircle2 size={18} /> :
+                             fu.status === "cancelado" ? <XCircle size={18} /> :
+                             isAtrasado ? <AlertCircle size={18} /> :
+                             <Clock size={18} />}
+                          </div>
+
+                          {/* Conteúdo */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-sm text-foreground">
+                                {fu.conversa?.nome || "Contato"}
+                              </span>
+                              <span className="text-[10px] text-muted-foreground">
+                                {fu.conversa?.telefone}
+                              </span>
+                              {fu.conversa?.status_kanban && (
+                                <Badge variant="secondary" className={`text-[10px] ${corEtapa(fu.conversa.status_kanban)}`}>
+                                  {fu.conversa.status_kanban}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground line-clamp-2 mb-1.5">
+                              {fu.texto}
+                            </p>
+                            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                              <span className={`flex items-center gap-1 ${isAtrasado ? 'text-red-400 font-medium' : ''}`}>
+                                <Clock size={10} />
+                                {fu.status === "enviado" && fu.enviado_em
+                                  ? `Enviado ${formatarData(fu.enviado_em)}`
+                                  : formatarData(fu.agendado_para)
+                                }
+                              </span>
+                              {fu.tentativas > 0 && (
+                                <span>Tentativas: {fu.tentativas}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Ações */}
+                          {fu.status === "pendente" && (
+                            <div className="flex gap-1">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400"
+                                onClick={() => handleCancelar(fu.id)}
+                                title="Cancelar"
+                              >
+                                <XCircle size={14} />
+                              </Button>
+                            </div>
+                          )}
+                          {(fu.status === "enviado" || fu.status === "cancelado") && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400"
+                              onClick={() => handleDeletar(fu.id)}
+                              title="Excluir"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+        </div>
+      </ScrollArea>
     </div>
   );
 }
