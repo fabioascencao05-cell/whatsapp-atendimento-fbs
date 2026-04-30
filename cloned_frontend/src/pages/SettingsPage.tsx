@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Settings, Zap, FileText, Plus, Save, Trash2, Edit2, X, Check, MessageSquare, Tag, ImageIcon, Upload } from 'lucide-react';
+
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -71,7 +72,8 @@ const PRESET_COLORS = [
 ];
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'respostas' | 'templates' | 'etiquetas' | 'geral'>('respostas');
+  const [tab, setTab] = useState<'respostas' | 'templates' | 'etiquetas' | 'geral' | 'funis'>('respostas');
+
   const { logoUrl, setLogoUrl } = useLogo();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [respostas, setRespostas] = useState<RespostaRapida[]>([]);
@@ -102,6 +104,54 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchRespostas().then(setRespostas);
   }, []);
+
+  // Mensagens dos funis — editáveis pelo usuário
+  const FUNIL_DEFAULTS = {
+    nao_respondeu: [
+      { horas: 24, texto: 'Oi! Vi que não conseguimos continuar nossa conversa. Ainda tem interesse em camisetas personalizadas? 😊' },
+      { horas: 48, texto: 'Opa! Só passando pra saber se conseguiu decidir. Temos grade completa e entrega rápida 🚀' },
+      { horas: 72, texto: 'Olá! Última tentativa — se precisar de camisetas personalizadas, estamos aqui! Qualquer dúvida é só me chamar.' },
+    ],
+    orcamento_sumiu: [
+      { horas: 48, texto: 'Oi! Conseguiu analisar o orçamento que enviamos? Posso te ajudar com alguma dúvida? 😊' },
+      { horas: 96, texto: 'Olá! Só para confirmar que o orçamento ainda está válido. Quando quiser fechar, é só me chamar 😊' },
+    ],
+    recorrente: [
+      { horas: 24 * 90, texto: 'Oi! Tudo bem? 😊 Passou um tempinho desde nosso último pedido. Está precisando de novas camisetas personalizadas?' },
+    ],
+  };
+
+  const [funilMsgs, setFunilMsgs] = useState(FUNIL_DEFAULTS);
+  const [funilSaving, setFunilSaving] = useState(false);
+  const [funilSaved, setFunilSaved] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/funil-msgs').then(r => r.ok ? r.json() : null).then(data => {
+      if (data) setFunilMsgs(data);
+    }).catch(() => {});
+  }, []);
+
+  const salvarFunilMsgs = async () => {
+    setFunilSaving(true);
+    try {
+      await fetch('/api/funil-msgs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(funilMsgs),
+      });
+      setFunilSaved(true);
+      setTimeout(() => setFunilSaved(false), 3000);
+    } catch {}
+    setFunilSaving(false);
+  };
+
+  const updateFunilMsg = (tipo: string, idx: number, campo: 'texto' | 'horas', valor: string | number) => {
+    setFunilMsgs(prev => ({
+      ...prev,
+      [tipo]: (prev as any)[tipo].map((m: any, i: number) => i === idx ? { ...m, [campo]: valor } : m),
+    }));
+  };
+
 
   // Respostas handlers
   const handleSaveResposta = async () => {
@@ -219,8 +269,20 @@ export default function SettingsPage() {
           >
             <Tag size={16} /> Etiquetas
           </button>
+          <button
+            onClick={() => setTab('funis')}
+            className={cn(
+              'flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg transition-all',
+              tab === 'funis'
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <MessageSquare size={16} /> Funis
+          </button>
         </div>
       </div>
+
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
@@ -715,6 +777,135 @@ export default function SettingsPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+        {/* === FUNIS === */}
+        {tab === 'funis' && (
+          <div className="max-w-3xl space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-foreground">Mensagens dos Funis</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Edite o texto e o intervalo de cada mensagem automática</p>
+              </div>
+              <Button size="sm" className="gap-1.5 text-xs" onClick={salvarFunilMsgs} disabled={funilSaving}>
+                {funilSaved ? <><Check size={13} /> Salvo!</> : <><Save size={13} /> Salvar Tudo</>}
+              </Button>
+            </div>
+
+            {/* Funil 1 */}
+            <div className="border rounded-xl bg-card overflow-hidden">
+              <div className="px-4 py-3 bg-red-500/10 border-b border-red-500/20 flex items-center gap-2">
+                <span className="text-base">🔴</span>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Não Respondeu</h3>
+                  <p className="text-[10px] text-muted-foreground">Sequência enviada quando o lead para de responder</p>
+                </div>
+              </div>
+              <div className="p-4 space-y-4">
+                {funilMsgs.nao_respondeu.map((msg, idx) => (
+                  <div key={idx} className="space-y-2 pb-4 border-b border-border/40 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted-foreground bg-secondary px-2 py-0.5 rounded-lg">Mensagem {idx + 1}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Enviar após</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={msg.horas}
+                          onChange={e => updateFunilMsg('nao_respondeu', idx, 'horas', parseInt(e.target.value) || 1)}
+                          className="w-14 text-xs h-7 border rounded-lg px-2 bg-secondary text-foreground text-center focus:ring-1 focus:ring-ring outline-none"
+                        />
+                        <span className="text-xs text-muted-foreground">horas</span>
+                      </div>
+                    </div>
+                    <Textarea
+                      value={msg.texto}
+                      onChange={e => updateFunilMsg('nao_respondeu', idx, 'texto', e.target.value)}
+                      className="text-sm bg-secondary border-0 min-h-[80px] resize-none"
+                      placeholder="Texto da mensagem..."
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Funil 2 */}
+            <div className="border rounded-xl bg-card overflow-hidden">
+              <div className="px-4 py-3 bg-yellow-500/10 border-b border-yellow-500/20 flex items-center gap-2">
+                <span className="text-base">🟡</span>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Recebeu Orçamento e Sumiu</h3>
+                  <p className="text-[10px] text-muted-foreground">Enviado para leads que sumiram após receber o valor</p>
+                </div>
+              </div>
+              <div className="p-4 space-y-4">
+                {funilMsgs.orcamento_sumiu.map((msg, idx) => (
+                  <div key={idx} className="space-y-2 pb-4 border-b border-border/40 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted-foreground bg-secondary px-2 py-0.5 rounded-lg">Mensagem {idx + 1}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Enviar após</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={msg.horas}
+                          onChange={e => updateFunilMsg('orcamento_sumiu', idx, 'horas', parseInt(e.target.value) || 1)}
+                          className="w-14 text-xs h-7 border rounded-lg px-2 bg-secondary text-foreground text-center focus:ring-1 focus:ring-ring outline-none"
+                        />
+                        <span className="text-xs text-muted-foreground">horas</span>
+                      </div>
+                    </div>
+                    <Textarea
+                      value={msg.texto}
+                      onChange={e => updateFunilMsg('orcamento_sumiu', idx, 'texto', e.target.value)}
+                      className="text-sm bg-secondary border-0 min-h-[80px] resize-none"
+                      placeholder="Texto da mensagem..."
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Funil 3 */}
+            <div className="border rounded-xl bg-card overflow-hidden">
+              <div className="px-4 py-3 bg-green-500/10 border-b border-green-500/20 flex items-center gap-2">
+                <span className="text-base">🟢</span>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Cliente Recorrente</h3>
+                  <p className="text-[10px] text-muted-foreground">Mensagem de reativação enviada a cada 90 dias</p>
+                </div>
+              </div>
+              <div className="p-4 space-y-4">
+                {funilMsgs.recorrente.map((msg, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted-foreground bg-secondary px-2 py-0.5 rounded-lg">Mensagem {idx + 1}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Ciclo a cada</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={msg.horas}
+                          onChange={e => updateFunilMsg('recorrente', idx, 'horas', parseInt(e.target.value) || 1)}
+                          className="w-16 text-xs h-7 border rounded-lg px-2 bg-secondary text-foreground text-center focus:ring-1 focus:ring-ring outline-none"
+                        />
+                        <span className="text-xs text-muted-foreground">horas</span>
+                      </div>
+                    </div>
+                    <Textarea
+                      value={msg.texto}
+                      onChange={e => updateFunilMsg('recorrente', idx, 'texto', e.target.value)}
+                      className="text-sm bg-secondary border-0 min-h-[80px] resize-none"
+                      placeholder="Texto da mensagem..."
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Button className="w-full gap-2" onClick={salvarFunilMsgs} disabled={funilSaving}>
+              {funilSaved ? <><Check size={14} /> Mensagens Salvas com Sucesso!</> : <><Save size={14} /> Salvar Mensagens dos Funis</>}
+            </Button>
           </div>
         )}
 

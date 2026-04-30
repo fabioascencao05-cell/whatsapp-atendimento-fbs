@@ -1133,11 +1133,11 @@ app.delete('/api/followups/:id', async (req, res) => {
 });
 
 // ==========================================
-// FUNIL AUTOMÁTICO — ENTRAR/SAIR
+// MENSAGENS DOS FUNIS (editáveis via Settings)
 // ==========================================
+const FUNIL_MSGS_PATH = path.join(__dirname, 'funil_msgs.json');
 
-// Mensagens dos funis
-const FUNIL_MSGS = {
+const FUNIL_MSGS_DEFAULT = {
     nao_respondeu: [
         { horas: 24, texto: 'Oi! Vi que não conseguimos continuar nossa conversa. Ainda tem interesse em camisetas personalizadas? 😊' },
         { horas: 48, texto: 'Opa! Só passando pra saber se conseguiu decidir. Temos grade completa e entrega rápida 🚀' },
@@ -1152,9 +1152,36 @@ const FUNIL_MSGS = {
     ],
 };
 
+function carregarFunilMsgs() {
+    try {
+        if (fs.existsSync(FUNIL_MSGS_PATH)) {
+            return JSON.parse(fs.readFileSync(FUNIL_MSGS_PATH, 'utf8'));
+        }
+    } catch {}
+    return FUNIL_MSGS_DEFAULT;
+}
+
+app.get('/api/funil-msgs', (req, res) => {
+    res.json(carregarFunilMsgs());
+});
+
+app.post('/api/funil-msgs', (req, res) => {
+    try {
+        const msgs = req.body;
+        fs.writeFileSync(FUNIL_MSGS_PATH, JSON.stringify(msgs, null, 2), 'utf8');
+        console.log('💾 Mensagens dos funis atualizadas!');
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ==========================================
+// FUNIL AUTOMÁTICO — ENTRAR/SAIR
+// ==========================================
+
 // POST: ativar funil para um lead com 1 clique
 app.post('/api/conversas/:id/entrar-funil', async (req, res) => {
     const { tipo } = req.body; // 'nao_respondeu' | 'orcamento_sumiu' | 'recorrente'
+    const FUNIL_MSGS = carregarFunilMsgs();
     if (!FUNIL_MSGS[tipo]) return res.status(400).json({ error: 'Tipo de funil inválido' });
     try {
         const primeiraMsg = FUNIL_MSGS[tipo][0];
@@ -1274,7 +1301,8 @@ cron.schedule('*/5 * * * *', async () => {
 
         for (const lead of leadsNoFunil) {
             try {
-                const msgs = FUNIL_MSGS[lead.funil_tipo];
+                const FUNIL_MSGS_LIVE = carregarFunilMsgs();
+                const msgs = FUNIL_MSGS_LIVE[lead.funil_tipo];
                 if (!msgs) continue;
 
                 const stepIdx = (lead.funil_step || 1) - 1;
