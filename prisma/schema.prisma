@@ -30,11 +30,19 @@ model Conversa {
   deleted_at      DateTime?
   deleted_by      String?
 
+  // Follow-up Automático por Funil
+  funil_tipo           String?   // 'nao_respondeu' | 'orcamento_sumiu' | 'recorrente'
+  funil_step           Int?      // qual mensagem da sequência (1, 2, 3)
+  funil_proximo        DateTime? // quando disparar a próxima mensagem
+  funil_ultimo_disparo DateTime? // quando foi o último envio
+  cliente_comprou_em   DateTime? // data da entrega (para funil recorrente)
+
   criado_em       DateTime   @default(now())
   atualizado_em   DateTime   @updatedAt
   mensagens       Mensagem[]
   followups       FollowUp[]
 }
+
 
 model Mensagem {
   id         String   @id @default(uuid())

@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const bodyParser = require('body-parser');
@@ -582,6 +582,21 @@ app.post('/api/webhook', async (req, res) => {
         });
     }
 
+    // Se cliente estava em funil e respondeu → cancelar funil automaticamente (exceto recorrente que reinicia)
+    if (conversa.funil_tipo && conversa.funil_tipo !== 'recorrente') {
+        await prisma.conversa.update({
+            where: { id: remoteJid },
+            data: { funil_tipo: null, funil_step: null, funil_proximo: null }
+        });
+        console.log(`🛑 Funil [${conversa.funil_tipo}] cancelado para ${conversa.nome} — cliente respondeu!`);
+    } else if (conversa.funil_tipo === 'recorrente') {
+        // Recorrente: só reinicia o ciclo de 90 dias
+        await prisma.conversa.update({
+            where: { id: remoteJid },
+            data: { funil_step: 1, funil_proximo: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) }
+        });
+    }
+
     // Deise só responde se: bot ON + estágio Novos + sem humano assumido
     if ((textoPraIA || texto) && conversa.status_bot && conversa.status_kanban === 'Novos' && !conversa.assumido_por) {
         // Debounce: se o cliente mandar várias mensagens rápido, espera 5s sem nova msg antes de responder
@@ -1118,7 +1133,76 @@ app.delete('/api/followups/:id', async (req, res) => {
 });
 
 // ==========================================
-// CRON: FOLLOW-UP AUTOMÁTICO + AGENDADOS
+// FUNIL AUTOMÁTICO — ENTRAR/SAIR
+// ==========================================
+
+// Mensagens dos funis
+const FUNIL_MSGS = {
+    nao_respondeu: [
+        { horas: 24, texto: 'Oi! Vi que não conseguimos continuar nossa conversa. Ainda tem interesse em camisetas personalizadas? 😊' },
+        { horas: 48, texto: 'Opa! Só passando pra saber se conseguiu decidir. Temos grade completa e entrega rápida 🚀' },
+        { horas: 72, texto: 'Olá! Última tentativa — se precisar de camisetas personalizadas, estamos aqui! Qualquer dúvida é só me chamar.' },
+    ],
+    orcamento_sumiu: [
+        { horas: 48, texto: 'Oi! Conseguiu analisar o orçamento que enviamos? Posso te ajudar com alguma dúvida? 😊' },
+        { horas: 96, texto: 'Olá! Só para confirmar que o orçamento ainda está válido. Quando quiser fechar, é só me chamar 😊' },
+    ],
+    recorrente: [
+        { horas: 24 * 90, texto: 'Oi! Tudo bem? 😊 Passou um tempinho desde nosso último pedido. Está precisando de novas camisetas personalizadas?' },
+    ],
+};
+
+// POST: ativar funil para um lead com 1 clique
+app.post('/api/conversas/:id/entrar-funil', async (req, res) => {
+    const { tipo } = req.body; // 'nao_respondeu' | 'orcamento_sumiu' | 'recorrente'
+    if (!FUNIL_MSGS[tipo]) return res.status(400).json({ error: 'Tipo de funil inválido' });
+    try {
+        const primeiraMsg = FUNIL_MSGS[tipo][0];
+        const proximo = new Date(Date.now() + primeiraMsg.horas * 60 * 60 * 1000);
+        await prisma.conversa.update({
+            where: { id: req.params.id },
+            data: {
+                funil_tipo: tipo,
+                funil_step: 1,
+                funil_proximo: proximo,
+                funil_ultimo_disparo: null,
+            }
+        });
+        console.log(`⚡ Lead ${req.params.id} entrou no funil [${tipo}]. Próximo: ${proximo.toISOString()}`);
+        res.json({ success: true, proximo });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST: remover lead do funil
+app.post('/api/conversas/:id/sair-funil', async (req, res) => {
+    try {
+        await prisma.conversa.update({
+            where: { id: req.params.id },
+            data: { funil_tipo: null, funil_step: null, funil_proximo: null }
+        });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET: leads por funil (para a Central de Follow-Up)
+app.get('/api/funil-stats', async (req, res) => {
+    try {
+        const leads = await prisma.conversa.findMany({
+            where: { funil_tipo: { not: null }, deleted_at: null },
+            select: { id: true, nome: true, telefone: true, funil_tipo: true, funil_step: true, funil_proximo: true, status_kanban: true }
+        });
+        const stats = {
+            nao_respondeu: leads.filter(l => l.funil_tipo === 'nao_respondeu'),
+            orcamento_sumiu: leads.filter(l => l.funil_tipo === 'orcamento_sumiu'),
+            recorrente: leads.filter(l => l.funil_tipo === 'recorrente'),
+        };
+        res.json(stats);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+
+// ==========================================
+// CRON: FOLLOW-UP AUTOMÁTICO + AGENDADOS + FUNIS
 // ==========================================
 cron.schedule('*/5 * * * *', async () => {
     console.log('⏰ Rodando verificação de Follow-up...');
@@ -1178,10 +1262,73 @@ cron.schedule('*/5 * * * *', async () => {
                 console.log(`✅ Follow-up automático enviado para: ${lead.nome}`);
             }
         }
+
+        // 3. FUNIS AUTOMÁTICOS (nao_respondeu, orcamento_sumiu, recorrente)
+        const leadsNoFunil = await prisma.conversa.findMany({
+            where: {
+                deleted_at: null,
+                funil_tipo: { not: null },
+                funil_proximo: { lte: agora },
+            }
+        });
+
+        for (const lead of leadsNoFunil) {
+            try {
+                const msgs = FUNIL_MSGS[lead.funil_tipo];
+                if (!msgs) continue;
+
+                const stepIdx = (lead.funil_step || 1) - 1;
+                const msgAtual = msgs[stepIdx];
+
+                if (!msgAtual) {
+                    // Acabou as mensagens do funil
+                    const novoStatus = (lead.funil_tipo === 'recorrente') ? lead.status_kanban : 'Perdido';
+                    await prisma.conversa.update({
+                        where: { id: lead.id },
+                        data: {
+                            funil_tipo: lead.funil_tipo === 'recorrente' ? 'recorrente' : null,
+                            funil_step: lead.funil_tipo === 'recorrente' ? 1 : null,
+                            funil_proximo: lead.funil_tipo === 'recorrente'
+                                ? new Date(agora.getTime() + 90 * 24 * 60 * 60 * 1000)
+                                : null,
+                            status_kanban: novoStatus,
+                        }
+                    });
+                    console.log(`🔚 Funil encerrado para ${lead.nome} (${lead.funil_tipo}) — status: ${novoStatus}`);
+                    continue;
+                }
+
+                // Envia a mensagem atual do funil
+                await enviarMensagemEvolution(lead.telefone, msgAtual.texto);
+                await prisma.mensagem.create({
+                    data: { conversaId: lead.id, texto: msgAtual.texto, origem: 'loja' }
+                });
+
+                const proxStep = stepIdx + 2; // próximo step (1-indexed)
+                const proxMsg = msgs[proxStep - 1];
+
+                await prisma.conversa.update({
+                    where: { id: lead.id },
+                    data: {
+                        funil_step: proxStep,
+                        funil_ultimo_disparo: agora,
+                        funil_proximo: proxMsg
+                            ? new Date(agora.getTime() + proxMsg.horas * 60 * 60 * 1000)
+                            : null,
+                    }
+                });
+
+                console.log(`⚡ Funil [${lead.funil_tipo}] step ${lead.funil_step} enviado para ${lead.nome}`);
+            } catch (err) {
+                console.error(`❌ Erro no funil para ${lead.nome}:`, err.message);
+            }
+        }
+
     } catch (err) {
         console.error('❌ Erro no Follow-up:', err.message);
     }
 }, { timezone: "America/Sao_Paulo" });
+
 
 // SPA Fallback
 app.get('*', (req, res) => {

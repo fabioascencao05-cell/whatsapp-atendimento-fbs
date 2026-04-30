@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Phone, Tag, Plus, X, Columns3, ArrowLeft, Edit2, Check, Bot, BotOff } from 'lucide-react';
+import { User, Phone, Tag, Plus, X, Columns3, ArrowLeft, Edit2, Check, Bot, BotOff, Zap, ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -93,6 +93,42 @@ export function ClientPanel({ conversa, respostas, onConversaUpdate, onBack }: P
       if (cols.length > 0) setPipelineOptions(cols.map(c => c.nome));
     }).catch(() => {});
   }, []);
+
+  // Funil automático
+  const [funilOpen, setFunilOpen] = useState(false);
+  const [funilAtivo, setFunilAtivo] = useState<string | null>((conversa as any).funil_tipo || null);
+  const [funilLoading, setFunilLoading] = useState(false);
+
+  const FUNIL_OPCOES = [
+    { tipo: 'nao_respondeu', label: '🔴 Não respondeu', desc: '24h → 48h → 72h' },
+    { tipo: 'orcamento_sumiu', label: '🟡 Recebeu orçamento e sumiu', desc: '48h → 96h' },
+    { tipo: 'recorrente', label: '🟢 Cliente recorrente', desc: 'A cada 90 dias' },
+  ];
+
+  const ativarFunil = async (tipo: string) => {
+    setFunilLoading(true);
+    try {
+      await fetch(`/api/conversas/${conversa.id}/entrar-funil`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo }),
+      });
+      setFunilAtivo(tipo);
+      setFunilOpen(false);
+      toast.success('✅ Lead inserido no funil automático!');
+    } catch { toast.error('Erro ao ativar funil'); }
+    setFunilLoading(false);
+  };
+
+  const sairFunil = async () => {
+    setFunilLoading(true);
+    try {
+      await fetch(`/api/conversas/${conversa.id}/sair-funil`, { method: 'POST' });
+      setFunilAtivo(null);
+      toast.success('Funil desativado');
+    } catch { toast.error('Erro ao desativar funil'); }
+    setFunilLoading(false);
+  };
 
   return (
     <div className="flex flex-col h-full bg-card border-l">
@@ -281,6 +317,63 @@ export function ClientPanel({ conversa, respostas, onConversaUpdate, onBack }: P
           >
             {pipelineOptions.map(col => <option key={col} value={col}>{col}</option>)}
           </select>
+        </div>
+
+        {/* ⚡ Funil Automático */}
+        <div className="bg-secondary/50 rounded-xl p-3 space-y-2">
+          <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+            <Zap size={12} className="text-primary" /> Follow-Up Automático
+          </label>
+
+          {funilAtivo ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge className="text-xs font-semibold bg-primary/15 text-primary border border-primary/30 flex-1 justify-center py-1">
+                  {FUNIL_OPCOES.find(f => f.tipo === funilAtivo)?.label || funilAtivo}
+                </Badge>
+              </div>
+              <p className="text-[10px] text-muted-foreground text-center">
+                {FUNIL_OPCOES.find(f => f.tipo === funilAtivo)?.desc}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={sairFunil}
+                disabled={funilLoading}
+              >
+                <X size={12} className="mr-1" /> Remover do funil
+              </Button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full h-8 text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+                onClick={() => setFunilOpen(!funilOpen)}
+                disabled={funilLoading}
+              >
+                <Zap size={13} /> Ativar Follow-Up <ChevronDown size={12} />
+              </Button>
+              {funilOpen && (
+                <div className="absolute top-9 left-0 right-0 z-20 bg-card border border-border rounded-xl shadow-lg overflow-hidden animate-in slide-in-from-top-2">
+                  {FUNIL_OPCOES.map(op => (
+                    <button
+                      key={op.tipo}
+                      onClick={() => ativarFunil(op.tipo)}
+                      className="w-full flex items-start gap-2 px-3 py-2.5 text-left hover:bg-secondary/60 transition-colors border-b border-border/30 last:border-0"
+                    >
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-foreground">{op.label}</p>
+                        <p className="text-[10px] text-muted-foreground">{op.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Status Bot */}
