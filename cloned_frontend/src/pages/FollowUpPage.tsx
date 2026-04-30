@@ -86,13 +86,18 @@ export default function FollowUpPage() {
     return { pendentes, enviados, atrasados };
   }, [followups]);
 
-  // Leads agrupados por etapa do kanban
-  const leadsPorEtapa = useMemo(() => {
-    const mapa: Record<string, Conversa[]> = {};
+  // Leads no funil automático
+  const funisAgrupados = useMemo(() => {
+    const mapa: Record<string, Conversa[]> = {
+      'nao_respondeu': [],
+      'orcamento_sumiu': [],
+      'recorrente': []
+    };
     conversas.forEach(c => {
-      const etapa = c.status_kanban || "Novos";
-      if (!mapa[etapa]) mapa[etapa] = [];
-      mapa[etapa].push(c);
+      const tipo = (c as any).funil_tipo;
+      if (tipo && mapa[tipo]) {
+        mapa[tipo].push(c);
+      }
     });
     return mapa;
   }, [conversas]);
@@ -153,26 +158,20 @@ export default function FollowUpPage() {
     return `em ${Math.round(horas / 24)}d`;
   }
 
-  // Mapear status_kanban para cor
-  function corEtapa(status: string) {
+  function nomeFunil(tipo: string) {
     const mapa: Record<string, string> = {
-      "Novos": "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
-      "Em Negociação": "bg-amber-500/15 text-amber-400 border-amber-500/30",
-      "Aguardando Pagamento": "bg-violet-500/15 text-violet-400 border-violet-500/30",
-      "Pedido Aprovado": "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-      "Pedido Entregue": "bg-green-500/15 text-green-400 border-green-500/30",
-      "Fechados": "bg-green-500/15 text-green-400 border-green-500/30",
-      "Finalizados": "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+      "nao_respondeu": "Não Respondeu",
+      "orcamento_sumiu": "Orçamento Sumiu",
+      "recorrente": "Cliente Recorrente"
     };
-    return mapa[status] || "bg-muted/30 text-muted-foreground border-border";
+    return mapa[tipo] || tipo;
   }
 
-  function emojiEtapa(status: string) {
+  function emojiFunil(tipo: string) {
     const mapa: Record<string, string> = {
-      "Novos": "🆕", "Em Negociação": "🤝", "Aguardando Pagamento": "💰",
-      "Pedido Aprovado": "✅", "Pedido Entregue": "🎉", "Fechados": "🏁", "Finalizados": "📦"
+      "nao_respondeu": "🔴", "orcamento_sumiu": "🟡", "recorrente": "🟢"
     };
-    return mapa[status] || "📋";
+    return mapa[tipo] || "⚙️";
   }
 
   if (loading) {
@@ -291,46 +290,48 @@ export default function FollowUpPage() {
             </Card>
           </div>
 
-          {/* FLUXO DO FUNIL — mostra leads em cada etapa */}
+          {/* FUNIS AUTOMÁTICOS */}
           <div>
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-              <GitBranch size={14} /> Fluxo do Funil
+              <GitBranch size={14} /> Funis Automáticos Ativos
             </h2>
             <div className="space-y-2.5">
-              {Object.entries(leadsPorEtapa).map(([etapa, leads], idx) => (
-                <Card key={etapa} className="overflow-hidden">
+              {Object.entries(funisAgrupados).map(([tipo, leads]) => (
+                <Card key={tipo} className="overflow-hidden">
                   <div className="flex items-center gap-3 px-4 py-3 border-b border-border/30">
-                    <span className="text-base">{emojiEtapa(etapa)}</span>
-                    <h3 className="font-semibold text-sm text-foreground flex-1">{etapa}</h3>
-                    <Badge variant="secondary" className={corEtapa(etapa)}>
+                    <span className="text-base">{emojiFunil(tipo)}</span>
+                    <h3 className="font-semibold text-sm text-foreground flex-1">{nomeFunil(tipo)}</h3>
+                    <Badge variant="secondary">
                       {leads.length} lead{leads.length !== 1 ? "s" : ""}
                     </Badge>
                   </div>
-                  {leads.length > 0 && (
+                  {leads.length > 0 ? (
                     <div className="p-3 flex flex-wrap gap-2">
-                      {leads.slice(0, 10).map(lead => (
-                        <div key={lead.id} className="flex items-center gap-2 bg-muted/20 border border-border/30 rounded-lg px-3 py-1.5 text-xs group hover:bg-muted/40 transition-colors">
-                          {lead.profile_pic_url ? (
-                            <img src={lead.profile_pic_url} className="w-5 h-5 rounded-full object-cover" alt="" />
-                          ) : (
-                            <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold text-muted-foreground">
-                              {lead.nome?.charAt(0) || "?"}
-                            </div>
-                          )}
-                          <span className="text-foreground/80">{lead.nome}</span>
-                          {lead.proximo_followup && (
-                            <span className="text-primary/60 text-[10px]">
-                              ⏰ {formatarData(lead.proximo_followup)}
-                            </span>
-                          )}
+                      {leads.map(lead => (
+                        <div key={lead.id} className="flex flex-col gap-1 bg-muted/20 border border-border/30 rounded-lg px-3 py-2 text-xs group hover:bg-muted/40 transition-colors">
+                          <div className="flex items-center gap-2">
+                            {lead.profile_pic_url ? (
+                              <img src={lead.profile_pic_url} className="w-5 h-5 rounded-full object-cover" alt="" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[9px] font-bold text-muted-foreground">
+                                {lead.nome?.charAt(0) || "?"}
+                              </div>
+                            )}
+                            <span className="text-foreground/80 font-semibold">{lead.nome}</span>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground flex flex-col gap-0.5 mt-1">
+                            <span>Etapa atual: <b>{(lead as any).funil_step || 1}</b></span>
+                            {(lead as any).funil_proximo && (
+                              <span className="text-primary/70">
+                                ⏰ Dispara {formatarData((lead as any).funil_proximo)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       ))}
-                      {leads.length > 10 && (
-                        <span className="text-[10px] text-muted-foreground px-2 py-1">
-                          +{leads.length - 10} mais
-                        </span>
-                      )}
                     </div>
+                  ) : (
+                    <div className="p-4 text-xs text-muted-foreground text-center">Nenhum lead neste funil.</div>
                   )}
                 </Card>
               ))}
@@ -399,7 +400,7 @@ export default function FollowUpPage() {
                                 {fu.conversa?.telefone}
                               </span>
                               {fu.conversa?.status_kanban && (
-                                <Badge variant="secondary" className={`text-[10px] ${corEtapa(fu.conversa.status_kanban)}`}>
+                                <Badge variant="secondary" className="text-[10px]">
                                   {fu.conversa.status_kanban}
                                 </Badge>
                               )}
