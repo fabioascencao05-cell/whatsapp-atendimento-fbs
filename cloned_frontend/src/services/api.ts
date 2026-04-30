@@ -114,13 +114,13 @@ export async function deletarResposta(id: string) {
 }
 
 export async function agendarFollowUp(id: string, config: FollowUpConfig & { proximo_followup: string }) {
-  return tryFetch(`/api/conversas/${id}/followup`, {
+  return tryFetch('/api/followups', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      horas: config.intervalo,
-      proximo_followup: config.proximo_followup,
-      template: config.template,
+      conversaId: id,
+      agendado_para: config.proximo_followup,
+      texto: config.template,
     }),
   });
 }

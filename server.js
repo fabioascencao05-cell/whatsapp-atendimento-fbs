@@ -419,9 +419,23 @@ Encaminhar corretamente para o setor de orçamentos.`;
             });
             console.log(`💾 Salvo no banco: ID ${msgSalva.id}`);
             recentSystemMessages.set(remoteJid.split('@')[0], Date.now());
+
+            // 🔔 NOTIFICAÇÃO DE ORÇAMENTO PARA O ADMIN
+            if (respostaIA.toLowerCase().includes('setor de orçamento')) {
+                console.log(`🔔 Bot identificou envio para orçamentos. Notificando admin...`);
+                const adminPhone = '5511965706626';
+                const msgAdmin = `🔔 *Novo lead pronto para orçamento!*\n\n*Cliente:* ${conversa.nome} (${conversa.telefone})\n\nAcesse o sistema para verificar os dados coletados pela Deise.`;
+                await enviarMensagemEvolution(adminPhone, msgAdmin);
+            }
         }
     } catch (err) {
         console.error('❌ Erro Crítico IA/Evolution:', err.message);
+        // 🚨 NOTIFICAÇÃO DE ERRO NO ROBÔ PARA O ADMIN
+        try {
+            const adminPhone = '5511965706626';
+            const msgErro = `⚠️ *Erro Crítico no Robô (Deise)!*\n\n*Erro:* ${err.message}\n*Cliente afetado:* ${remoteJid}`;
+            await enviarMensagemEvolution(adminPhone, msgErro);
+        } catch (e) { console.error('Erro ao notificar admin:', e.message); }
     }
 }
 
