@@ -1079,7 +1079,7 @@ app.post('/api/broadcast', async (req, res) => {
     const { ids, texto } = req.body;
     if (!ids || !ids.length || !texto) return res.status(400).json({ error: "IDs e texto são obrigatórios" });
     
-    console.log(`📡 Disparo em massa para ${ids.length} contatos`);
+    console.log(`📢 Disparo em massa para ${ids.length} contatos`);
     
     let enviados = 0;
     let falhas = 0;
@@ -1087,11 +1087,16 @@ app.post('/api/broadcast', async (req, res) => {
     // Disparo com intervalo de 3-5 segundos entre cada envio
     for (const id of ids) {
         try {
-            const number = id.split('@')[0];
+            const number = id.includes('@') ? id.split('@')[0] : id.replace(/\D/g, ''); // Extract number only
             await enviarMensagemEvolution(number, texto);
-            await prisma.mensagem.create({
-                data: { conversaId: id, texto, origem: 'loja' }
-            });
+            
+            try {
+                await prisma.mensagem.create({
+                    data: { conversaId: id.includes('@') ? id : `${number}@s.whatsapp.net`, texto, origem: 'loja' }
+                });
+            } catch (dbErr) {
+                // Number is not in Conversa DB, this is normal for manual broadcast list
+            }
             enviados++;
         } catch (err) {
             console.error(`❌ Falha ao enviar para ${id}:`, err.message);

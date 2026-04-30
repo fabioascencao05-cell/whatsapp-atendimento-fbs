@@ -35,6 +35,8 @@ export default function BroadcastPage() {
   const [mensagem, setMensagem] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sendResult, setSendResult] = useState<string | null>(null);
+  const [modoDisparo, setModoDisparo] = useState<'filtros' | 'manual'>('filtros');
+  const [numerosManuais, setNumerosManuais] = useState('');
 
   useEffect(() => {
     fetchConversas().then(setConversas);
@@ -53,10 +55,24 @@ export default function BroadcastPage() {
   }, [conversas, selectedPipeline, selectedTag]);
 
   const handleSend = async () => {
-    if (alvos.length === 0) return toast.error('Nenhum cliente selecionado');
-    if (!mensagem.trim()) return toast.error('Digite a mensagem');
+    let idsParaEnvio: string[] = [];
 
-    if (!confirm(`Confirmar disparo para ${alvos.length} cliente(s)? Esta ação enviará mensagens reais pelo WhatsApp.`)) return;
+    if (modoDisparo === 'filtros') {
+      if (alvos.length === 0) return toast.error('Nenhum cliente selecionado');
+      idsParaEnvio = alvos.map(a => a.id);
+    } else {
+      // Manual mode
+      const parsedNumbers = numerosManuais
+        .split(/[\n,;]+/)
+        .map(n => n.replace(/\D/g, ''))
+        .filter(n => n.length >= 10);
+      
+      if (parsedNumbers.length === 0) return toast.error('Nenhum número válido encontrado na lista');
+      idsParaEnvio = parsedNumbers.map(n => n.startsWith('55') ? n : `55${n}`);
+    }
+
+    if (!mensagem.trim()) return toast.error('Digite a mensagem');
+    if (!confirm(`Confirmar disparo para ${idsParaEnvio.length} número(s)? Esta ação enviará mensagens reais.`)) return;
 
     setIsSending(true);
     setSendResult(null);
@@ -64,12 +80,13 @@ export default function BroadcastPage() {
       const res = await fetch('/api/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: alvos.map(a => a.id), texto: mensagem }),
+        body: JSON.stringify({ ids: idsParaEnvio, texto: mensagem }),
       });
       const data = await res.json();
       setSendResult(data.message);
       toast.success(data.message);
       setMensagem('');
+      if (modoDisparo === 'manual') setNumerosManuais('');
     } catch (err) {
       toast.error('Erro ao iniciar disparo');
     } finally {
@@ -97,39 +114,68 @@ export default function BroadcastPage() {
           {/* Configuração */}
           <div className="md:col-span-2 space-y-4">
             <div className="bg-card rounded-2xl border p-6 shadow-sm space-y-4">
-              <div className="flex items-center gap-2 text-sm font-semibold mb-2">
+              <div className="flex items-center gap-2 text-sm font-semibold mb-4">
                 <Filter size={16} className="text-primary" /> 1. Definir Público do Disparo
               </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase">Filtro por Etapa</label>
-                  <select
-                    value={selectedPipeline}
-                    onChange={e => setSelectedPipeline(e.target.value)}
-                    className="w-full text-xs border rounded-xl px-3 py-2.5 bg-secondary text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition-all"
-                  >
-                    <option value="Todos">Todas as etapas do funil</option>
-                    {['Novos', 'Em Negociação', 'Aguardando Pagamento', 'Pedido Aprovado', 'Pedido Entregue'].map(col => (
-                      <option key={col} value={col}>{col}</option>
-                    ))}
-                  </select>
-                </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase">Filtro por Etiqueta</label>
-                  <select
-                    value={selectedTag}
-                    onChange={e => setSelectedTag(e.target.value)}
-                    className="w-full text-xs border rounded-xl px-3 py-2.5 bg-secondary text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition-all"
-                  >
-                    <option value="Todas">Todas as etiquetas</option>
-                    {etiquetas.map(e => (
-                      <option key={e.id} value={e.nome}>{e.nome}</option>
-                    ))}
-                  </select>
-                </div>
+              {/* Toggle Mode */}
+              <div className="flex bg-secondary p-1 rounded-xl w-fit mb-4">
+                <button
+                  onClick={() => setModoDisparo('filtros')}
+                  className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", modoDisparo === 'filtros' ? "bg-card shadow-sm text-primary" : "text-muted-foreground")}
+                >
+                  Usar Filtros (Base)
+                </button>
+                <button
+                  onClick={() => setModoDisparo('manual')}
+                  className={cn("px-4 py-1.5 text-xs font-bold rounded-lg transition-all", modoDisparo === 'manual' ? "bg-card shadow-sm text-primary" : "text-muted-foreground")}
+                >
+                  Colar Lista (Manual)
+                </button>
               </div>
+              
+              {modoDisparo === 'filtros' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase">Filtro por Etapa</label>
+                    <select
+                      value={selectedPipeline}
+                      onChange={e => setSelectedPipeline(e.target.value)}
+                      className="w-full text-xs border rounded-xl px-3 py-2.5 bg-secondary text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition-all"
+                    >
+                      <option value="Todos">Todas as etapas do funil</option>
+                      {['Novos', 'Em Negociação', 'Aguardando Pagamento', 'Pedido Aprovado', 'Pedido Entregue'].map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase">Filtro por Etiqueta</label>
+                    <select
+                      value={selectedTag}
+                      onChange={e => setSelectedTag(e.target.value)}
+                      className="w-full text-xs border rounded-xl px-3 py-2.5 bg-secondary text-foreground focus:ring-2 focus:ring-primary focus:outline-none transition-all"
+                    >
+                      <option value="Todas">Todas as etiquetas</option>
+                      {etiquetas.map(e => (
+                        <option key={e.id} value={e.nome}>{e.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase">Cole os números aqui (um por linha ou separados por vírgula)</label>
+                  <Textarea
+                    placeholder="Ex: 11999999999&#10;11988888888"
+                    value={numerosManuais}
+                    onChange={(e) => setNumerosManuais(e.target.value)}
+                    className="min-h-[100px] text-sm bg-secondary border-0 rounded-xl resize-none font-mono"
+                  />
+                  <p className="text-[10px] text-muted-foreground">O sistema irá extrair apenas os números automaticamente e adicionar o DDI 55.</p>
+                </div>
+              )}
 
               <div className="pt-4 space-y-4 border-t border-border/50">
                 <div className="flex items-center justify-between">
@@ -186,7 +232,7 @@ export default function BroadcastPage() {
 
                 <Button 
                   className="w-full h-12 rounded-2xl text-sm font-bold gap-2 shadow-lg shadow-primary/20"
-                  disabled={isSending || alvos.length === 0}
+                  disabled={isSending || (modoDisparo === 'filtros' && alvos.length === 0) || (modoDisparo === 'manual' && numerosManuais.trim().length === 0)}
                   onClick={handleSend}
                 >
                   {isSending ? (
@@ -194,7 +240,7 @@ export default function BroadcastPage() {
                   ) : (
                     <Send size={18} />
                   )}
-                  {isSending ? 'Enviando disparo...' : `Disparar para ${alvos.length} clientes`}
+                  {isSending ? 'Enviando disparo...' : `Disparar Mensagens`}
                 </Button>
               </div>
             </div>
@@ -208,17 +254,21 @@ export default function BroadcastPage() {
                 </div>
                 <div className="space-y-4">
                    <div className="flex justify-between items-center text-xs">
-                     <span className="text-muted-foreground">Selecionados:</span>
-                     <span className="font-bold text-foreground text-lg text-primary">{alvos.length}</span>
+                     <span className="text-muted-foreground">Público Alvo:</span>
+                     <Badge variant="secondary" className="font-bold">{modoDisparo === 'filtros' ? `${alvos.length} clientes base` : 'Lista Manual'}</Badge>
                    </div>
-                   <div className="flex justify-between items-center text-xs">
-                     <span className="text-muted-foreground">Etapa:</span>
-                     <Badge variant="secondary" className="font-bold">{selectedPipeline}</Badge>
-                   </div>
-                   <div className="flex justify-between items-center text-xs">
-                     <span className="text-muted-foreground">Etiqueta:</span>
-                     <Badge variant="secondary" className="font-bold">{selectedTag}</Badge>
-                   </div>
+                   {modoDisparo === 'filtros' && (
+                     <>
+                       <div className="flex justify-between items-center text-xs">
+                         <span className="text-muted-foreground">Etapa:</span>
+                         <Badge variant="secondary" className="font-bold">{selectedPipeline}</Badge>
+                       </div>
+                       <div className="flex justify-between items-center text-xs">
+                         <span className="text-muted-foreground">Etiqueta:</span>
+                         <Badge variant="secondary" className="font-bold">{selectedTag}</Badge>
+                       </div>
+                     </>
+                   )}
                    <div className="flex justify-between items-center text-xs">
                      <span className="text-muted-foreground">Risco de Ban:</span>
                      <span className="text-success font-bold flex items-center gap-1">Baixo <CheckCircle2 size={10} /></span>
