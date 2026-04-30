@@ -206,8 +206,8 @@ export function ConversaList({ conversas, activeId, onSelect, onSync }: Props) {
               className={cn(
                 'w-full flex items-start gap-3 px-4 py-3.5 text-left transition-all border-b border-border/30',
                 activeId === c.id
-                  ? 'bg-primary/5 border-l-[3px] border-l-primary'
-                  : 'hover:bg-secondary/60'
+                  ? 'bg-secondary'
+                  : 'hover:bg-secondary/50 bg-card'
               )}
             >
               <div className="relative shrink-0">

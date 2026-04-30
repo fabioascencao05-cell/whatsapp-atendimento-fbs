@@ -5,33 +5,33 @@
 
 @layer base {
   :root {
-    /* Premium Modern Dark Theme - Melhorado */
-    --background: 220 25% 7%;
-    --foreground: 210 20% 98%;
+    /* WhatsApp Web Light Theme */
+    --background: 0 0% 100%; /* #ffffff */
+    --foreground: 210 10% 10%; /* #111b21 */
 
-    --card: 220 20% 11%;
-    --card-foreground: 210 20% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 10% 10%;
 
-    --popover: 220 20% 11%;
-    --popover-foreground: 210 20% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 10% 10%;
 
-    --primary: 155 80% 50%;
-    --primary-foreground: 220 25% 7%;
+    --primary: 167 100% 33%; /* #00a884 - verde clássico */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 16%;
-    --secondary-foreground: 210 20% 85%;
+    --secondary: 216 16% 94%; /* #f0f2f5 - fundo esquerdo e cabeçalhos */
+    --secondary-foreground: 210 15% 30%; /* #3b4a54 */
 
-    --muted: 220 15% 16%;
-    --muted-foreground: 215 15% 65%;
+    --muted: 216 16% 94%;
+    --muted-foreground: 210 12% 46%; /* #667781 */
 
-    --accent: 155 80% 50%;
-    --accent-foreground: 220 25% 7%;
+    --accent: 167 100% 33%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 155 80% 50%;
-    --success-foreground: 220 25% 7%;
+    --success: 167 100% 33%;
+    --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 55%;
     --warning-foreground: 0 0% 100%;
@@ -39,29 +39,30 @@
     --info: 210 90% 65%;
     --info-foreground: 0 0% 100%;
 
-    --nav: 220 20% 9%;
-    --nav-foreground: 215 15% 65%;
-    --nav-active: 155 80% 50%;
+    --nav: 216 16% 94%;
+    --nav-foreground: 210 12% 46%;
+    --nav-active: 167 100% 33%;
 
-    --bubble-client: 220 20% 15%;
-    --bubble-bot: 155 40% 18%;
-    --bubble-store: 220 30% 20%;
+    /* Chat Bubbles */
+    --bubble-client: 0 0% 100%; /* branco */
+    --bubble-bot: 94 73% 88%; /* #dcf8c6 */
+    --bubble-store: 94 73% 88%; /* #dcf8c6 */
 
-    --chat-bg: 220 25% 7%;
+    --chat-bg: 38 31% 91%; /* #efeae2 */
 
-    --border: 220 15% 18%;
-    --input: 220 15% 18%;
-    --ring: 155 80% 50%;
-    --radius: 0.8rem;
+    --border: 210 16% 90%; /* bordas mais claras */
+    --input: 210 16% 90%;
+    --ring: 167 100% 33%;
+    --radius: 0.5rem;
 
-    --sidebar-background: 220 20% 9%;
-    --sidebar-foreground: 215 15% 65%;
-    --sidebar-primary: 155 80% 50%;
-    --sidebar-primary-foreground: 220 25% 7%;
-    --sidebar-accent: 220 25% 15%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 220 15% 18%;
-    --sidebar-ring: 155 80% 50%;
+    --sidebar-background: 216 16% 94%;
+    --sidebar-foreground: 210 12% 46%;
+    --sidebar-primary: 167 100% 33%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 16% 90%;
+    --sidebar-accent-foreground: 210 10% 10%;
+    --sidebar-border: 210 16% 90%;
+    --sidebar-ring: 167 100% 33%;
   }
 }
 

@@ -400,18 +400,18 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
 
       {/* Input bar */}
       {!showSchedule && (
-        <div className="flex items-center gap-2 px-3 py-3 border-t bg-card">
+        <div className="flex items-center gap-2 px-3 py-3 border-t bg-secondary">
           <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={handleImageSelect} />
           <input ref={videoInputRef} type="file" accept="video/*" multiple hidden onChange={handleVideoSelect} />
 
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-info shrink-0 h-9 w-9" onClick={() => imageInputRef.current?.click()}>
-            <Image size={18} />
+            <Image size={20} />
           </Button>
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary shrink-0 h-9 w-9" onClick={() => videoInputRef.current?.click()}>
-            <Video size={18} />
+            <Video size={20} />
           </Button>
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground shrink-0 h-9 w-9" onClick={() => document.getElementById('file-attach')?.click()}>
-            <Paperclip size={18} />
+            <Paperclip size={20} />
           </Button>
           <input id="file-attach" type="file" hidden onChange={(e) => {
             const files = e.target.files;
@@ -423,7 +423,7 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
             onChange={e => handleInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
             placeholder='Mensagem... (use "/" para atalhos)'
-            className="flex-1 bg-secondary border-0 h-10 rounded-xl"
+            className="flex-1 bg-background border-0 h-11 rounded-lg px-4 shadow-sm"
           />
 
         <Button
