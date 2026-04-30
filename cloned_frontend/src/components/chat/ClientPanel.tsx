@@ -98,11 +98,30 @@ export function ClientPanel({ conversa, respostas, onConversaUpdate, onBack }: P
   const [funilOpen, setFunilOpen] = useState(false);
   const [funilAtivo, setFunilAtivo] = useState<string | null>((conversa as any).funil_tipo || null);
   const [funilLoading, setFunilLoading] = useState(false);
+  const [funilConfigs, setFunilConfigs] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/api/funil-msgs').then(r => r.ok ? r.json() : null).then(data => {
+      if (data) setFunilConfigs(data);
+    }).catch(() => {});
+  }, []);
 
   const FUNIL_OPCOES = [
-    { tipo: 'nao_respondeu', label: '🔴 Não respondeu', desc: '24h → 48h → 72h' },
-    { tipo: 'orcamento_sumiu', label: '🟡 Recebeu orçamento e sumiu', desc: '48h → 96h' },
-    { tipo: 'recorrente', label: '🟢 Cliente recorrente', desc: 'A cada 90 dias' },
+    { 
+      tipo: 'nao_respondeu', 
+      label: '🔴 Não respondeu', 
+      desc: funilConfigs?.nao_respondeu ? funilConfigs.nao_respondeu.map((m: any) => `${m.horas}h`).join(' → ') : 'Carregando...' 
+    },
+    { 
+      tipo: 'orcamento_sumiu', 
+      label: '🟡 Recebeu orçamento e sumiu', 
+      desc: funilConfigs?.orcamento_sumiu ? funilConfigs.orcamento_sumiu.map((m: any) => `${m.horas}h`).join(' → ') : 'Carregando...' 
+    },
+    { 
+      tipo: 'recorrente', 
+      label: '🟢 Cliente recorrente', 
+      desc: funilConfigs?.recorrente ? `A cada ${Math.floor(funilConfigs.recorrente[0].horas / 24)} dias` : 'Carregando...' 
+    },
   ];
 
   const ativarFunil = async (tipo: string) => {
