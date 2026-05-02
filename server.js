@@ -480,6 +480,31 @@ Encaminhar corretamente para o setor de orçamentos.${contextSummary}`;
                 const msgAdmin = `⚠️ *A Deise não soube responder!*\n\n*Cliente:* ${conversa.nome} (${conversa.telefone})\n*Pergunta:* ${textoDaMensagem}\n\nAcesse o sistema e assuma o atendimento.`;
                 await enviarMensagemEvolution(adminPhone, msgAdmin);
             }
+
+            // 🤖 ATIVAÇÃO AUTOMÁTICA DO FUNIL "NÃO RESPONDEU" APÓS RESPOSTA DA DEISE
+            // Se o lead ainda não está em nenhum funil, ativar automaticamente o funil de não respondeu
+            const conversaAtual = await prisma.conversa.findUnique({ where: { id: remoteJid } });
+            if (conversaAtual && !conversaAtual.funil_tipo && conversaAtual.status_kanban === 'Novos' && !conversaAtual.assumido_por) {
+                try {
+                    const FUNIL_MSGS_LIVE = carregarFunilMsgs();
+                    const primeiraMsg = FUNIL_MSGS_LIVE?.nao_respondeu?.[0];
+                    const horasParaPrimeiro = primeiraMsg?.horas || 24; // Default 24h se não configurado
+                    const proximoDisparo = new Date(Date.now() + horasParaPrimeiro * 60 * 60 * 1000);
+
+                    await prisma.conversa.update({
+                        where: { id: remoteJid },
+                        data: {
+                            funil_tipo: 'nao_respondeu',
+                            funil_step: 1,
+                            funil_proximo: proximoDisparo,
+                            funil_ultimo_disparo: null,
+                        }
+                    });
+                    console.log(`🤖 Funil [nao_respondeu] ativado automaticamente para ${conversaAtual.nome} — disparo em ${horasParaPrimeiro}h`);
+                } catch (funilErr) {
+                    console.error('❌ Erro ao ativar funil automático:', funilErr.message);
+                }
+            }
         }
     } catch (err) {
         console.error('❌ Erro Crítico IA/Evolution:', err.message);
