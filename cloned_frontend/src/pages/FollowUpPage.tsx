@@ -94,7 +94,7 @@ export default function FollowUpPage() {
       'recorrente': []
     };
     conversas.forEach(c => {
-      const tipo = (c as any).funil_tipo;
+      const tipo = c.funil_tipo;
       if (tipo && mapa[tipo]) {
         mapa[tipo].push(c);
       }
@@ -320,10 +320,10 @@ export default function FollowUpPage() {
                             <span className="text-foreground/80 font-semibold">{lead.nome}</span>
                           </div>
                           <div className="text-[10px] text-muted-foreground flex flex-col gap-0.5 mt-1">
-                            <span>Etapa atual: <b>{(lead as any).funil_step || 1}</b></span>
-                            {(lead as any).funil_proximo && (
+                            <span>Etapa atual: <b>{lead.funil_step || 1}</b></span>
+                            {lead.funil_proximo && (
                               <span className="text-primary/70">
-                                ⏰ Dispara {formatarData((lead as any).funil_proximo)}
+                                ⏰ Dispara {formatarData(lead.funil_proximo)}
                               </span>
                             )}
                           </div>

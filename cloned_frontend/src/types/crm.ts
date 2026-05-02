@@ -21,6 +21,11 @@ export interface Conversa {
   label_id?: string | null;
   etiquetas?: Etiqueta[];
   valor_conversa?: number;
+  // Funil automático
+  funil_tipo?: string | null;
+  funil_step?: number | null;
+  funil_proximo?: string | null;
+  funil_ultimo_disparo?: string | null;
 }
 
 export interface FollowUpConfig {

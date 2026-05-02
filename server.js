@@ -492,31 +492,7 @@ Encaminhar corretamente para o setor de orçamentos.${contextSummary}`;
                 const msgAdmin = `⚠️ *A Deise não soube responder!*\n\n*Cliente:* ${conversa.nome} (${conversa.telefone})\n*Pergunta:* ${textoDaMensagem}\n\nAcesse o sistema e assuma o atendimento.`;
                 await enviarMensagemEvolution(adminPhone, msgAdmin);
             }
-
-            // 🤖 ATIVAÇÃO AUTOMÁTICA DO FUNIL "NÃO RESPONDEU" APÓS RESPOSTA DA DEISE
-            // Se o lead ainda não está em nenhum funil, ativar automaticamente o funil de não respondeu
-            const conversaAtual = await prisma.conversa.findUnique({ where: { id: remoteJid } });
-            if (conversaAtual && !conversaAtual.funil_tipo && conversaAtual.status_kanban === 'Novos' && !conversaAtual.assumido_por) {
-                try {
-                    const FUNIL_MSGS_LIVE = carregarFunilMsgs();
-                    const primeiraMsg = FUNIL_MSGS_LIVE?.nao_respondeu?.[0];
-                    const horasParaPrimeiro = primeiraMsg?.horas || 24; // Default 24h se não configurado
-                    const proximoDisparo = new Date(Date.now() + horasParaPrimeiro * 60 * 60 * 1000);
-
-                    await prisma.conversa.update({
-                        where: { id: remoteJid },
-                        data: {
-                            funil_tipo: 'nao_respondeu',
-                            funil_step: 1,
-                            funil_proximo: proximoDisparo,
-                            funil_ultimo_disparo: null,
-                        }
-                    });
-                    console.log(`🤖 Funil [nao_respondeu] ativado automaticamente para ${conversaAtual.nome} — disparo em ${horasParaPrimeiro}h`);
-                } catch (funilErr) {
-                    console.error('❌ Erro ao ativar funil automático:', funilErr.message);
-                }
-            }
+            // ℹ️ O funil "nao_respondeu" é ativado automaticamente pelo cron após 3h sem resposta do cliente.
         }
     } catch (err) {
         console.error('❌ Erro Crítico IA/Evolution:', err.message);
@@ -1410,7 +1386,52 @@ cron.schedule('*/5 * * * *', async () => {
             }
         }
 
-        // 3. FUNIS AUTOMÁTICOS (nao_respondeu, orcamento_sumiu, recorrente)
+        // 3. ATIVAÇÃO AUTOMÁTICA DO FUNIL "NÃO RESPONDEU" (3h sem resposta do cliente após Deise responder)
+        const tresHorasAtras = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+        const leadsParaFunil = await prisma.conversa.findMany({
+            where: {
+                deleted_at: null,
+                status_bot: true,
+                status_kanban: 'Novos',
+                funil_tipo: null,
+                assumido_por: null,
+                atualizado_em: { lte: tresHorasAtras }, // Sem atividade há 3h+
+            },
+            include: {
+                mensagens: {
+                    orderBy: { criado_em: 'desc' },
+                    take: 1
+                }
+            }
+        });
+
+        for (const lead of leadsParaFunil) {
+            const ultimaMsg = lead.mensagens[0];
+            // Só ativa se a ÚLTIMA mensagem foi do bot (cliente não respondeu)
+            if (ultimaMsg && ultimaMsg.origem === 'bot') {
+                try {
+                    const FUNIL_MSGS_LIVE = carregarFunilMsgs();
+                    const primeiraMsg = FUNIL_MSGS_LIVE?.nao_respondeu?.[0];
+                    const horasParaPrimeiro = primeiraMsg?.horas || 24;
+                    const proximoDisparo = new Date(agora.getTime() + horasParaPrimeiro * 60 * 60 * 1000);
+
+                    await prisma.conversa.update({
+                        where: { id: lead.id },
+                        data: {
+                            funil_tipo: 'nao_respondeu',
+                            funil_step: 1,
+                            funil_proximo: proximoDisparo,
+                            funil_ultimo_disparo: null,
+                        }
+                    });
+                    console.log(`🤖 [CRON] Funil [nao_respondeu] ativado para ${lead.nome} — 3h sem resposta.`);
+                } catch (funilErr) {
+                    console.error(`❌ Erro ao ativar funil automático para ${lead.nome}:`, funilErr.message);
+                }
+            }
+        }
+
+        // 4. FUNIS AUTOMÁTICOS (nao_respondeu, orcamento_sumiu, recorrente)
         const leadsNoFunil = await prisma.conversa.findMany({
             where: {
                 deleted_at: null,
