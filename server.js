@@ -493,25 +493,35 @@ Encaminhar corretamente para o setor de orçamentos.${contextSummary}`;
 }
 
 // ==========================================
-// TRANSCRIÇÃO DE ÁUDIO (WHISPER)
+// TRANSCRIÇÃO DE ÁUDIO (WHISPER via Evolution)
 // ==========================================
-async function transcreverAudio(audioUrl) {
+async function transcreverAudio(messageKey) {
     if (!openai) {
         console.log('⚠️ OpenAI não configurada — transcrição de áudio indisponível.');
         return null;
     }
     try {
-        console.log('🎤 Baixando áudio para transcrição...');
-        const response = await axios({
-            url: audioUrl,
-            method: 'GET',
-            responseType: 'arraybuffer',
-            headers: { 'apikey': process.env.EVOLUTION_API_KEY }
+        console.log('🎤 Baixando áudio via Evolution API...');
+        
+        // Usar o endpoint correto da Evolution para obter o base64 do áudio
+        const evolutionUrl = `${process.env.EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/${process.env.EVOLUTION_INSTANCE}`;
+        const mediaResponse = await axios.post(evolutionUrl, {
+            message: { key: messageKey },
+            convertToMp4: false
+        }, {
+            headers: { 'apikey': process.env.EVOLUTION_API_KEY },
+            timeout: 30000
         });
+
+        const base64Data = mediaResponse.data?.base64;
+        if (!base64Data) {
+            console.log('⚠️ Evolution não retornou base64 para o áudio.');
+            return null;
+        }
 
         const tmpPath = path.join(__dirname, 'tmp', `audio_${Date.now()}.ogg`);
         fs.mkdirSync(path.join(__dirname, 'tmp'), { recursive: true });
-        fs.writeFileSync(tmpPath, Buffer.from(response.data));
+        fs.writeFileSync(tmpPath, Buffer.from(base64Data, 'base64'));
 
         console.log('🎙️ Transcrevendo áudio com Whisper...');
         const transcription = await openai.audio.transcriptions.create({
@@ -520,7 +530,7 @@ async function transcreverAudio(audioUrl) {
             language: 'pt'
         });
 
-        fs.unlinkSync(tmpPath); // Remove arquivo temporário
+        fs.unlinkSync(tmpPath);
         console.log(`✅ Transcrição: ${transcription.text}`);
         return transcription.text;
     } catch (err) {
@@ -624,19 +634,20 @@ app.post('/api/webhook', async (req, res) => {
         create: { id: remoteJid, nome: pushName, telefone: number, ultima_mensagem: texto || `[Arquivo ${mediaType}]` }
     });
 
-    // Transcrição de áudio: se for áudio do cliente, tenta transcrever com Whisper
+    // Transcrição de áudio: se for áudio do cliente, transcreve com Whisper antes de tudo
     let textoPraIA = texto;
-    if (mediaType === 'audio' && !isFromMe && conversa.status_bot && conversa.status_kanban === 'Novos' && !conversa.assumido_por) {
+    if (mediaType === 'audio' && !isFromMe) {
         try {
-            const mediaMsg = data.data.message?.audioMessage;
-            const audioUrl = mediaMsg?.url || data.data.message?.base64;
-            if (audioUrl && audioUrl.startsWith('http')) {
-                const transcricao = await transcreverAudio(audioUrl);
-                if (transcricao) {
-                    textoPraIA = transcricao;
-                    texto = transcricao; // salvar no banco como texto
-                    console.log(`🎤 Áudio transcrito: "${transcricao}"`);
-                }
+            const messageKey = data.data.key;
+            console.log(`🎤 Áudio recebido de ${conversa.nome} — tentando transcrever...`);
+            const transcricao = await transcreverAudio(messageKey);
+            if (transcricao) {
+                textoPraIA = transcricao;
+                texto = transcricao; // Salvar transcrição como texto no banco
+                console.log(`🎤 Áudio transcrito com sucesso: "${transcricao}"`);
+            } else {
+                console.log('⚠️ Transcrição falhou — tratando como mensagem de áudio sem texto.');
+                textoPraIA = '[cliente enviou um áudio]';
             }
         } catch (audioErr) {
             console.error('❌ Erro ao processar áudio:', audioErr.message);
