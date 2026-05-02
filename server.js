@@ -467,11 +467,23 @@ Encaminhar corretamente para o setor de orçamentos.${contextSummary}`;
             const adminPhone = '5511965706626';
             const respostaLower = respostaIA.toLowerCase();
 
-            // 🔔 NOTIFICAÇÃO DE ORÇAMENTO PARA O ADMIN
+            // 🔔 NOTIFICAÇÃO DE ORÇAMENTO PARA O ADMIN + MOVER PARA "Em Negociação"
             if (respostaLower.includes('setor de orçamento') || respostaLower.includes('encaminhar pro setor')) {
-                console.log(`🔔 Bot identificou envio para orçamentos. Notificando admin...`);
+                console.log(`🔔 Bot identificou envio para orçamentos. Notificando admin e movendo lead...`);
                 const msgAdmin = `🔔 *Novo lead pronto para orçamento!*\n\n*Cliente:* ${conversa.nome} (${conversa.telefone})\n\nAcesse o sistema para ver os dados coletados pela Deise.`;
                 await enviarMensagemEvolution(adminPhone, msgAdmin);
+
+                // Mover automaticamente para "Em Negociação" e cancelar qualquer funil ativo
+                await prisma.conversa.update({
+                    where: { id: remoteJid },
+                    data: {
+                        status_kanban: 'Em Negociação',
+                        funil_tipo: null,
+                        funil_step: null,
+                        funil_proximo: null,
+                    }
+                });
+                console.log(`📋 Lead ${conversa.nome} movido para "Em Negociação" automaticamente.`);
             }
 
             // 🚨 NOTIFICAÇÃO QUANDO DEISE NÃO SOUBE RESPONDER
