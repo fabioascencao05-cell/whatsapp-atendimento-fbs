@@ -36,11 +36,30 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
   const [scheduleTime, setScheduleTime] = useState('');
   const [attachments, setAttachments] = useState<{ name: string; type: string }[]>([]);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [mensagens]);
+  // Rola para o final SOMENTE se o usuário já está perto do final OU é uma nova conversa
+  const isNearBottom = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
+
+  // Quando a conversa muda, rola para o final imediatamente
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [conversa.id]);
+
+  // Quando chegam novas mensagens, só rola se o usuário está perto do final
+  useEffect(() => {
+    if (isNearBottom()) {
+      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [mensagens]);
 
   // Dynamic pipeline options
   const pipelineOptions = etiquetas.length > 0
@@ -258,7 +277,7 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin chat-pattern">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin chat-pattern">
         {mensagens.map(m => (
           <div key={m.id} className={cn('flex animate-fade-in', m.origem === 'cliente' ? 'justify-start' : 'justify-end')}>
             <div className={cn(
