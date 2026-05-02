@@ -68,11 +68,28 @@ async function processarIA(remoteJid, textoDaMensagem) {
         const historico = await prisma.mensagem.findMany({
             where: { conversaId: remoteJid },
             orderBy: { criado_em: 'desc' },
-            take: 10
+            take: 20
         });
         const historicoOrdenado = historico.reverse();
         console.log(`📜 Histórico: ${historicoOrdenado.length} msgs`);
-        historicoOrdenado.forEach(m => console.log(`  [${m.origem}]: ${m.texto}`));
+        historicoOrdenado.forEach(m => console.log(`  [${m.origem}]: ${m.texto || '[mídia]'}`));
+
+        // Build context summary from history to avoid repetition
+        const jaPerguntado = [];
+        const jaInformado = {};
+        historicoOrdenado.forEach(m => {
+            if (m.origem === 'bot' && m.texto) {
+                if (/modelo/i.test(m.texto)) jaPerguntado.push('modelo');
+                if (/quantidade|quantas pe/i.test(m.texto)) jaPerguntado.push('quantidade');
+                if (/cor/i.test(m.texto)) jaPerguntado.push('cor');
+                if (/tamanho/i.test(m.texto)) jaPerguntado.push('tamanho');
+                if (/cep|entrega/i.test(m.texto)) jaPerguntado.push('cep');
+                if (/nome|como.+chama/i.test(m.texto)) jaPerguntado.push('nome');
+            }
+        });
+        const contextSummary = jaPerguntado.length > 0
+            ? `\n\n⚠️ ATENÇÃO TOTAL: Você JÁ perguntou sobre [${[...new Set(jaPerguntado)].join(', ')}] nessa conversa. NÃO repita essas perguntas. Veja o histórico e avance.`
+            : '';
         const systemPrompt = `🎭 IDENTIDADE E COMPORTAMENTO
 
 Você é Deise, atendente da FBS Camisetas, de Mauá - SP.
@@ -376,17 +393,44 @@ Se o histórico mostrar que o encaminhamento já foi feito:
 - não continue puxando assunto
 - aguardar o humano assumir
 
+🚨 ANTI-REPETIÇÃO — REGRA ABSOLUTA
+
+ANTES de escrever qualquer resposta, você DEVE:
+1. Ler TODAS as mensagens do histórico acima
+2. Identificar o que você (assistant) já perguntou
+3. Identificar o que o cliente (user) já respondeu
+4. NUNCA fazer a mesma pergunta duas vezes
+5. Se o cliente já informou algo, use a informação — nunca peça de novo
+
+📸 IMAGENS ENVIADAS PELO CLIENTE
+
+Se no histórico aparecer "[cliente enviou uma imagem/foto]" ou o cliente mencionar que mandou uma foto:
+- Reconheça naturalmente: "Recebi sua foto!"
+- Pergunte apenas o que ainda falta (modelo, quantidade, cor, etc.)
+- NÃO peça que o cliente descreva o que já está na imagem
+- Trate como se você tivesse visto a imagem
+
+❓ QUANDO NÃO SOUBER RESPONDER
+
+Se o cliente fizer uma pergunta fora do seu escopo (ex: preço específico, desconto, prazo diferente, etc.), NÃO invente.
+Use esta resposta:
+"Boa pergunta! Vou encaminhar pro setor de orçamentos que tem todas essas informações na ponta da língua. Em breve eles entram em contato! 😊"
+
 🎯 OBJETIVO FINAL
 
 Atender de forma natural, humana e organizada.
 Coletar as informações certas sem repetir perguntas.
 Fazer o cliente se sentir bem atendido.
-Encaminhar corretamente para o setor de orçamentos.`;
+Encaminhar corretamente para o setor de orçamentos.${contextSummary}`;
         const contexto = [
             { role: "system", content: systemPrompt },
             ...historicoOrdenado.map(msg => ({
                 role: msg.origem === 'bot' ? 'assistant' : 'user',
-                content: msg.texto || ''
+                content: msg.texto
+                    ? msg.texto
+                    : msg.mediaType
+                        ? `[cliente enviou uma ${msg.mediaType === 'image' ? 'imagem/foto' : msg.mediaType}]`
+                        : '[mensagem sem texto]'
             })),
             { role: "user", content: textoDaMensagem }
         ];
@@ -420,11 +464,20 @@ Encaminhar corretamente para o setor de orçamentos.`;
             console.log(`💾 Salvo no banco: ID ${msgSalva.id}`);
             recentSystemMessages.set(remoteJid.split('@')[0], Date.now());
 
+            const adminPhone = '5511965706626';
+            const respostaLower = respostaIA.toLowerCase();
+
             // 🔔 NOTIFICAÇÃO DE ORÇAMENTO PARA O ADMIN
-            if (respostaIA.toLowerCase().includes('setor de orçamento')) {
+            if (respostaLower.includes('setor de orçamento') || respostaLower.includes('encaminhar pro setor')) {
                 console.log(`🔔 Bot identificou envio para orçamentos. Notificando admin...`);
-                const adminPhone = '5511965706626';
-                const msgAdmin = `🔔 *Novo lead pronto para orçamento!*\n\n*Cliente:* ${conversa.nome} (${conversa.telefone})\n\nAcesse o sistema para verificar os dados coletados pela Deise.`;
+                const msgAdmin = `🔔 *Novo lead pronto para orçamento!*\n\n*Cliente:* ${conversa.nome} (${conversa.telefone})\n\nAcesse o sistema para ver os dados coletados pela Deise.`;
+                await enviarMensagemEvolution(adminPhone, msgAdmin);
+            }
+
+            // 🚨 NOTIFICAÇÃO QUANDO DEISE NÃO SOUBE RESPONDER
+            if (respostaLower.includes('encaminhar pro setor de orçamentos que tem todas essas informações')) {
+                console.log(`🚨 Deise não soube responder. Notificando admin...`);
+                const msgAdmin = `⚠️ *A Deise não soube responder!*\n\n*Cliente:* ${conversa.nome} (${conversa.telefone})\n*Pergunta:* ${textoDaMensagem}\n\nAcesse o sistema e assuma o atendimento.`;
                 await enviarMensagemEvolution(adminPhone, msgAdmin);
             }
         }
