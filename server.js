@@ -393,22 +393,21 @@ Se o histórico mostrar que o encaminhamento já foi feito:
 - não continue puxando assunto
 - aguardar o humano assumir
 
-🚨 ANTI-REPETIÇÃO — REGRA ABSOLUTA
+🚨 ANTI-REPETIÇÃO — REGRA ABSOLUTA (CRÍTICO)
 
-ANTES de escrever qualquer resposta, você DEVE:
-1. Ler TODAS as mensagens do histórico acima
-2. Identificar o que você (assistant) já perguntou
-3. Identificar o que o cliente (user) já respondeu
-4. NUNCA fazer a mesma pergunta duas vezes
-5. Se o cliente já informou algo, use a informação — nunca peça de novo
+ANTES de escrever qualquer resposta, você DEVE analisar:
+1. O que você acabou de perguntar na sua ÚLTIMA mensagem?
+2. O que o cliente já informou?
+3. NUNCA, em hipótese alguma, repita a mesma pergunta duas vezes na mesma conversa.
+4. Se o cliente ignorou sua pergunta e mudou de assunto, siga o fluxo do cliente antes de voltar a cobrar a informação.
 
 📸 IMAGENS ENVIADAS PELO CLIENTE
 
-Se no histórico aparecer "[cliente enviou uma imagem/foto]" ou o cliente mencionar que mandou uma foto:
-- Reconheça naturalmente: "Recebi sua foto!"
-- Pergunte apenas o que ainda falta (modelo, quantidade, cor, etc.)
-- NÃO peça que o cliente descreva o que já está na imagem
-- Trate como se você tivesse visto a imagem
+Se no histórico aparecer "[cliente enviou uma imagem/foto]" ou "[arquivo image]":
+- ENTENDA AUTOMATICAMENTE que o cliente está te mostrando o MODELO ou a ARTE que ele quer fazer.
+- NÃO peça para o cliente descrever a imagem. Aja como se você estivesse vendo ela perfeitamente.
+- Agradeça a imagem e vá direto para a próxima pergunta que falta (quantidade, tamanho, cor ou CEP).
+- Exemplo prático: "Recebi sua foto aqui, que modelo bacana! Pra eu conseguir te passar certinho, qual seria a quantidade de peças?"
 
 ❓ QUANDO NÃO SOUBER RESPONDER
 
@@ -706,7 +705,7 @@ app.post('/api/webhook', async (req, res) => {
             });
             const textoFinal = ultimaMsgs.reverse().map(m => m.texto).filter(Boolean).join(' ');
             await processarIA(remoteJid, textoFinal || texto);
-        }, 12000); // Espera 12 segundos (mais humano)
+        }, 25000); // Espera 25 segundos (mais humano e dá tempo do cliente mandar várias fotos/textos)
         debounceTimers.set(remoteJid, timer);
     } else {
         console.log(`⏸️ IA pausada (Kanban: ${conversa.status_kanban} | Assumido: ${conversa.assumido_por || 'ninguém'})`);
@@ -1450,8 +1449,8 @@ cron.schedule('*/5 * * * *', async () => {
                 const msgAtual = msgs[stepIdx];
 
                 if (!msgAtual) {
-                    // Acabou as mensagens do funil
-                    const novoStatus = (lead.funil_tipo === 'recorrente') ? lead.status_kanban : 'Perdido';
+                    // Acabou as mensagens do funil — lead não respondeu nenhuma
+                    const novoStatus = (lead.funil_tipo === 'recorrente') ? lead.status_kanban : 'Não Fechou';
                     await prisma.conversa.update({
                         where: { id: lead.id },
                         data: {
