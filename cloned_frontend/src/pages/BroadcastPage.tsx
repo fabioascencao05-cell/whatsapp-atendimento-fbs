@@ -37,6 +37,7 @@ export default function BroadcastPage() {
   const [sendResult, setSendResult] = useState<string | null>(null);
   const [modoDisparo, setModoDisparo] = useState<'filtros' | 'manual'>('filtros');
   const [numerosManuais, setNumerosManuais] = useState('');
+  const [intervaloSegundos, setIntervaloSegundos] = useState(15);
 
   useEffect(() => {
     fetchConversas().then(setConversas);
@@ -80,7 +81,7 @@ export default function BroadcastPage() {
       const res = await fetch('/api/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: idsParaEnvio, texto: mensagem }),
+        body: JSON.stringify({ ids: idsParaEnvio, texto: mensagem, intervalo: intervaloSegundos }),
       });
       const data = await res.json();
       setSendResult(data.message);
@@ -225,9 +226,38 @@ export default function BroadcastPage() {
                   </div>
                 )}
 
+                {/* Intervalo entre envios */}
+                <div className="bg-secondary/50 rounded-xl p-4 space-y-3 border border-border/50">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase flex items-center gap-1.5">
+                      ⏱️ Pausa entre cada envio
+                    </label>
+                    <span className="text-sm font-bold text-primary tabular-nums">
+                      {intervaloSegundos}s
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={120}
+                    step={5}
+                    value={intervaloSegundos}
+                    onChange={e => setIntervaloSegundos(Number(e.target.value))}
+                    className="w-full accent-primary"
+                  />
+                  <div className="flex justify-between text-[9px] text-muted-foreground font-medium">
+                    <span>5s (rápido)</span>
+                    <span>60s (seguro)</span>
+                    <span>120s (muito seguro)</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Intervalo maior = menor risco de bloqueio pelo WhatsApp. Recomendado acima de 15s.
+                  </p>
+                </div>
+
                 <div className="bg-secondary/30 rounded-xl p-3 flex gap-3 text-[11px] text-muted-foreground">
                    <AlertCircle size={14} className="shrink-0 text-amber-500" />
-                   <p>O sistema enviará mensagens uma por uma com intervalos aleatórios de 3 a 5 segundos para proteger seu número.</p>
+                   <p>O sistema envia mensagem por mensagem com a pausa configurada acima. Nunca envie para mais de 200 contatos por dia.</p>
                 </div>
 
                 <Button 

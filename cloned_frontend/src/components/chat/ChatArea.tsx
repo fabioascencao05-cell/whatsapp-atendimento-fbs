@@ -27,6 +27,27 @@ function formatWhatsAppTime(d: string) {
   return new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatDateSeparator(d: string) {
+  const date = new Date(d);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (isSameDay(date, today)) return 'Hoje';
+  if (isSameDay(date, yesterday)) return 'Ontem';
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function getDayKey(d: string) {
+  const date = new Date(d);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
 export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, onConversaUpdate, onBack, onOpenPanel, onDelete }: Props) {
   const { etiquetas } = useEtiquetas();
   const [texto, setTexto] = useState('');
@@ -48,18 +69,23 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
     return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
 
-  // Quando a conversa muda, rola para o final imediatamente
+  // Quando a conversa muda, rola para o final imediatamente (com timeout para garantir render)
   useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    const timer = setTimeout(() => {
+      const el = scrollContainerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 80);
+    return () => clearTimeout(timer);
   }, [conversa.id]);
 
   // Quando chegam novas mensagens, só rola se o usuário está perto do final
   useEffect(() => {
     if (isNearBottom()) {
-      endRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setTimeout(() => {
+        endRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
     }
-  }, [mensagens]);
+  }, [mensagens.length]);
 
   // Dynamic pipeline options
   const pipelineOptions = etiquetas.length > 0
@@ -278,77 +304,109 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
 
       {/* Messages */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin chat-pattern">
-        {mensagens.map(m => (
-          <div key={m.id} className={cn('flex animate-fade-in', m.origem === 'cliente' ? 'justify-start' : 'justify-end')}>
-            <div className={cn(
-              'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm',
-              m.origem === 'cliente'
-                ? 'bg-bubble-client text-foreground rounded-tl-sm border border-border/50'
-                : m.origem === 'bot'
-                  ? 'bg-bubble-bot text-foreground rounded-tr-sm'
-                  : 'bg-bubble-store text-foreground rounded-tr-sm'
-            )}>
-              {m.origem !== 'cliente' && (
-                <span className={cn(
-                  'text-[10px] font-semibold block mb-0.5',
-                  m.origem === 'bot' ? 'text-success' : 'text-info'
-                )}>
-                  {m.origem === 'bot' ? '🤖 Bot' : '👤 Você'}
+        {mensagens.reduce((acc, m, i) => {
+          const dayKey = getDayKey(m.criado_em);
+          const prevDayKey = i > 0 ? getDayKey(mensagens[i - 1].criado_em) : null;
+          const showSeparator = dayKey !== prevDayKey;
+
+          return [
+            ...acc,
+            showSeparator && (
+              <div key={`sep-${dayKey}`} className="flex items-center gap-3 my-3">
+                <div className="flex-1 h-px bg-border/50" />
+                <span className="text-[10px] font-semibold text-muted-foreground px-2 py-0.5 bg-secondary/50 rounded-full border border-border/30">
+                  {formatDateSeparator(m.criado_em)}
                 </span>
-              )}
-
-              {/* Image */}
-              {m.mediaType === 'image' && m.mediaUrl && (
-                <img
-                  src={m.mediaUrl.startsWith('http') ? `/api/proxy-media?url=${encodeURIComponent(m.mediaUrl)}` : m.mediaUrl}
-                  alt="Imagem"
-                  loading="lazy"
-                  onClick={() => setLightboxUrl(m.mediaUrl!)}
-                  className="rounded-lg max-w-full max-h-[240px] object-cover cursor-pointer hover:opacity-90 transition-opacity mb-1"
-                />
-              )}
-
-              {/* Audio */}
-              {m.mediaType === 'audio' && m.mediaUrl && (
-                <AudioPlayer src={m.mediaUrl.startsWith('http') ? `/api/proxy-media?url=${encodeURIComponent(m.mediaUrl)}` : m.mediaUrl} className="my-1" />
-              )}
-
-              {/* Video */}
-              {m.mediaType === 'video' && m.mediaUrl && (
-                <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-black/5">
-                   <video controls className="max-w-full h-auto">
-                     <source src={m.mediaUrl.startsWith('http') ? `/api/proxy-media?url=${encodeURIComponent(m.mediaUrl)}` : m.mediaUrl} type="video/mp4" />
-                   </video>
-                </div>
-              )}
-
-              {/* Document */}
-              {m.mediaType === 'document' && m.mediaUrl && (
-                <div className="mb-2 flex items-center gap-3 p-3 bg-secondary/30 rounded-xl border border-border/50 cursor-pointer hover:bg-secondary/50 transition-colors" onClick={() => window.open(m.mediaUrl!, '_blank')}>
-                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                      <Paperclip size={20} />
-                   </div>
-                   <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold truncate">{m.texto || 'Documento'}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase">Abrir Arquivo</p>
-                   </div>
-                </div>
-              )}
-
-              {m.texto && <p className="leading-relaxed whitespace-pre-wrap">{m.texto}</p>}
-              <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-muted-foreground">
-                <p>{formatWhatsAppTime(m.criado_em)}</p>
+                <div className="flex-1 h-px bg-border/50" />
+              </div>
+            ),
+            <div key={m.id} className={cn('flex animate-fade-in', m.origem === 'cliente' ? 'justify-start' : 'justify-end')}>
+              <div className={cn(
+                'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm',
+                m.origem === 'cliente'
+                  ? 'bg-bubble-client text-foreground rounded-tl-sm border border-border/50'
+                  : m.origem === 'bot'
+                    ? 'bg-bubble-bot text-foreground rounded-tr-sm'
+                    : 'bg-bubble-store text-foreground rounded-tr-sm'
+              )}>
                 {m.origem !== 'cliente' && (
-                  <span className={cn(m.status_leitura === 'READ' ? 'text-blue-500' : 'text-muted-foreground/60')}>
-                    {m.status_leitura === 'READ' ? <CheckCheck size={12} strokeWidth={3} /> :
-                     m.status_leitura === 'DELIVERED' ? <CheckCheck size={12} strokeWidth={2} /> :
-                     <Check size={12} strokeWidth={2} />}
+                  <span className={cn(
+                    'text-[10px] font-semibold block mb-0.5',
+                    m.origem === 'bot' ? 'text-success' : 'text-info'
+                  )}>
+                    {m.origem === 'bot' ? '🤖 Bot' : '👤 Você'}
                   </span>
                 )}
+
+                {/* Image: tenta URL local primeiro, cai para proxy se for URL externa */}
+                {m.mediaType === 'image' && (
+                  <img
+                    src={m.mediaUrl
+                      ? (m.mediaUrl.startsWith('http')
+                          ? `/api/proxy-media?url=${encodeURIComponent(m.mediaUrl)}`
+                          : m.mediaUrl)
+                      : undefined}
+                    alt="Imagem"
+                    loading="lazy"
+                    onClick={() => m.mediaUrl && setLightboxUrl(
+                      m.mediaUrl.startsWith('http')
+                        ? `/api/proxy-media?url=${encodeURIComponent(m.mediaUrl)}`
+                        : m.mediaUrl
+                    )}
+                    className="rounded-lg max-w-full max-h-[240px] object-cover cursor-pointer hover:opacity-90 transition-opacity mb-1"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
+
+                {/* Audio */}
+                {m.mediaType === 'audio' && m.mediaUrl && (
+                  <AudioPlayer src={m.mediaUrl.startsWith('http') ? `/api/proxy-media?url=${encodeURIComponent(m.mediaUrl)}` : m.mediaUrl} className="my-1" />
+                )}
+
+                {/* Video */}
+                {m.mediaType === 'video' && m.mediaUrl && (
+                  <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-black/5">
+                     <video controls className="max-w-full h-auto">
+                       <source src={m.mediaUrl.startsWith('http') ? `/api/proxy-media?url=${encodeURIComponent(m.mediaUrl)}` : m.mediaUrl} type="video/mp4" />
+                     </video>
+                  </div>
+                )}
+
+                {/* Document */}
+                {m.mediaType === 'document' && m.mediaUrl && (
+                  <div className="mb-2 flex items-center gap-3 p-3 bg-secondary/30 rounded-xl border border-border/50 cursor-pointer hover:bg-secondary/50 transition-colors" onClick={() => window.open(m.mediaUrl!, '_blank')}>
+                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                        <Paperclip size={20} />
+                     </div>
+                     <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{m.texto || 'Documento'}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase">Abrir Arquivo</p>
+                     </div>
+                  </div>
+                )}
+
+                {/* Placeholder se for imagem sem URL */}
+                {m.mediaType === 'image' && !m.mediaUrl && (
+                  <div className="rounded-lg bg-secondary/50 flex items-center justify-center w-48 h-32 mb-1 text-muted-foreground text-[10px] border border-border/30">
+                    📷 Imagem
+                  </div>
+                )}
+
+                {m.texto && <p className="leading-relaxed whitespace-pre-wrap">{m.texto}</p>}
+                <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-muted-foreground">
+                  <p>{formatWhatsAppTime(m.criado_em)}</p>
+                  {m.origem !== 'cliente' && (
+                    <span className={cn(m.status_leitura === 'READ' ? 'text-blue-500' : 'text-muted-foreground/60')}>
+                      {m.status_leitura === 'READ' ? <CheckCheck size={12} strokeWidth={3} /> :
+                       m.status_leitura === 'DELIVERED' ? <CheckCheck size={12} strokeWidth={2} /> :
+                       <Check size={12} strokeWidth={2} />}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ].filter(Boolean);
+        }, [] as React.ReactNode[])}
         <div ref={endRef} />
       </div>
 

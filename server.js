@@ -1221,15 +1221,16 @@ app.post('/api/sync', async (req, res) => {
 // DISPARO EM MASSA (BROADCAST)
 // ==========================================
 app.post('/api/broadcast', async (req, res) => {
-    const { ids, texto } = req.body;
+    const { ids, texto, intervalo } = req.body;
     if (!ids || !ids.length || !texto) return res.status(400).json({ error: "IDs e texto são obrigatórios" });
     
-    console.log(`📢 Disparo em massa para ${ids.length} contatos`);
+    const delayMs = Math.max(5000, (intervalo || 15) * 1000); // mínimo 5s para segurança
+    console.log(`📢 Disparo em massa para ${ids.length} contatos | Intervalo: ${delayMs / 1000}s`);
     
     let enviados = 0;
     let falhas = 0;
     
-    // Disparo com intervalo de 3-5 segundos entre cada envio
+    // Disparo com intervalo configurado pelo usuário + variação aleatória de até 3s para humanizar
     for (const id of ids) {
         try {
             const number = id.includes('@') ? id.split('@')[0] : id.replace(/\D/g, ''); // Extract number only
@@ -1247,8 +1248,8 @@ app.post('/api/broadcast', async (req, res) => {
             console.error(`❌ Falha ao enviar para ${id}:`, err.message);
             falhas++;
         }
-        // Rate limiting: espera entre 3 e 5 segundos entre cada mensagem
-        await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 2000));
+        // Pausa configurada + variação aleatória de até 3s
+        await new Promise(resolve => setTimeout(resolve, delayMs + Math.random() * 3000));
     }
     
     res.json({ message: `Disparo concluído! ${enviados} enviados, ${falhas} falhas.` });
