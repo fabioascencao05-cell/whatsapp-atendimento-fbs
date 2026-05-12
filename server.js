@@ -465,7 +465,13 @@ Encaminhar corretamente para o setor de orçamentos.${contextSummary}`;
             const respostaLower = respostaIA.toLowerCase();
 
             // 🔔 NOTIFICAÇÃO DE ORÇAMENTO PARA O ADMIN + MOVER PARA "Em Negociação"
-            if (respostaLower.includes('setor de orçamento') || respostaLower.includes('encaminhar pro setor')) {
+            const keywordsHandoff = [
+                'setor de orçamento', 'encaminhar pro setor', 'setor responsável',
+                'pessoal do orçamento', 'entram em contato', 'equipe de venda',
+                'passar para o comercial', 'setor comercial'
+            ];
+            
+            if (keywordsHandoff.some(k => respostaLower.includes(k))) {
                 console.log(`🔔 Bot identificou envio para orçamentos. Notificando admin e movendo lead...`);
                 const msgAdmin = `🔔 *Novo lead pronto para orçamento!*\n\n*Cliente:* ${conversa.nome} (${conversa.telefone})\n\nAcesse o sistema para ver os dados coletados pela Deise.`;
                 await enviarMensagemEvolution(adminPhone, msgAdmin);
