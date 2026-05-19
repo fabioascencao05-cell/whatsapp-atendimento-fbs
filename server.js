@@ -1353,13 +1353,15 @@ app.post('/api/funil-msgs', (req, res) => {
 // ==========================================
 
 // POST: ativar funil para um lead com 1 clique
+// POST: ativar funil para um lead com 1 clique
 app.post('/api/conversas/:id/entrar-funil', async (req, res) => {
-    const { tipo } = req.body; // 'nao_respondeu' | 'orcamento_sumiu' | 'recorrente'
+    const { tipo, dias } = req.body; // 'nao_respondeu' | 'orcamento_sumiu' | 'recorrente'
     const FUNIL_MSGS = carregarFunilMsgs();
     if (!FUNIL_MSGS[tipo]) return res.status(400).json({ error: 'Tipo de funil inválido' });
     try {
         const primeiraMsg = FUNIL_MSGS[tipo][0];
-        const proximo = new Date(Date.now() + primeiraMsg.horas * 60 * 60 * 1000);
+        const horas = (dias !== undefined && dias !== null) ? (Number(dias) * 24) : primeiraMsg.horas;
+        const proximo = new Date(Date.now() + horas * 60 * 60 * 1000);
         await prisma.conversa.update({
             where: { id: req.params.id },
             data: {

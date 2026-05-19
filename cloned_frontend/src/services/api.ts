@@ -181,3 +181,11 @@ export async function cancelarFollowUp(id: string) {
 export async function deletarFollowUp(id: string) {
   return tryFetch(`/api/followups/${id}`, { method: 'DELETE' });
 }
+
+export async function agendarRecorrente(id: string, dias: number) {
+  return tryFetch(`/api/conversas/${id}/entrar-funil`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tipo: 'recorrente', dias }),
+  });
+}
