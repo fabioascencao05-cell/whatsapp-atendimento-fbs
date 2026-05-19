@@ -218,16 +218,25 @@ export default function FollowUpPage() {
         <div className="flex h-full gap-4 min-w-max pb-2">
           
           {/* COLUNA 1: NÃO RESPONDEU */}
-          <div className="w-72 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm flex-none">
+          <div className="w-72 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm flex-none" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) prepararAgendamento(id, 'nao_respondeu'); }}>
             <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
               <div className="flex items-center gap-2"><RefreshCw size={16} className="text-blue-500"/><span>Não Respondeu</span></div>
               <Badge variant="secondary">{funilNaoRespondeu.length}</Badge>
             </div>
             <div className="flex-1 p-3 overflow-y-auto space-y-3">
                 {funilNaoRespondeu.map(lead => (
-                  <div key={lead.id} className="bg-card border p-3 rounded-lg flex flex-col gap-2 shadow-sm hover:border-blue-500/50 transition-colors cursor-pointer" onClick={() => abrirChatLateral(lead)}>
+                  <div 
+                    key={lead.id} 
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('leadId', lead.id)}
+                    className="bg-card border p-3 rounded-lg flex flex-col gap-2 shadow-sm hover:border-blue-500/50 transition-colors cursor-grab active:cursor-grabbing" 
+                    onClick={() => abrirChatLateral(lead)}
+                  >
                     <div className="flex justify-between items-start">
-                      <span className="font-semibold text-sm">{lead.nome}</span>
+                      <div className="flex items-center gap-2">
+                        <GripVertical size={14} className="text-muted-foreground/40" />
+                        <span className="font-semibold text-sm">{lead.nome}</span>
+                      </div>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleSairDoFunil(lead.id); }} title="Sair do Funil (Parar Robô)">
                         <PowerOff size={14} />
                       </Button>
@@ -242,16 +251,25 @@ export default function FollowUpPage() {
           </div>
 
           {/* COLUNA 2: ORÇAMENTO SUMIU */}
-          <div className="w-72 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm flex-none">
+          <div className="w-72 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm flex-none" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) prepararAgendamento(id, 'orcamento_sumiu'); }}>
             <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
               <div className="flex items-center gap-2"><RefreshCw size={16} className="text-orange-500"/><span>Orçamento Sumiu</span></div>
               <Badge variant="secondary">{funilOrcamentoSumiu.length}</Badge>
             </div>
             <div className="flex-1 p-3 overflow-y-auto space-y-3">
                 {funilOrcamentoSumiu.map(lead => (
-                  <div key={lead.id} className="bg-card border p-3 rounded-lg flex flex-col gap-2 shadow-sm hover:border-orange-500/50 transition-colors cursor-pointer" onClick={() => abrirChatLateral(lead)}>
+                  <div 
+                    key={lead.id} 
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('leadId', lead.id)}
+                    className="bg-card border p-3 rounded-lg flex flex-col gap-2 shadow-sm hover:border-orange-500/50 transition-colors cursor-grab active:cursor-grabbing" 
+                    onClick={() => abrirChatLateral(lead)}
+                  >
                     <div className="flex justify-between items-start">
-                      <span className="font-semibold text-sm">{lead.nome}</span>
+                      <div className="flex items-center gap-2">
+                        <GripVertical size={14} className="text-muted-foreground/40" />
+                        <span className="font-semibold text-sm">{lead.nome}</span>
+                      </div>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleSairDoFunil(lead.id); }} title="Sair do Funil (Parar Robô)">
                         <PowerOff size={14} />
                       </Button>
@@ -393,7 +411,10 @@ export default function FollowUpPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
-              {agendarTipo === 'recorrente' ? 'Agendar Mensagem Recorrente' : 'Agendar Reativação (Igrejas/Empresas)'}
+              {agendarTipo === 'recorrente' ? 'Agendar Mensagem Recorrente' : 
+               agendarTipo === 'reativacao' ? 'Agendar Reativação (Igrejas/Empresas)' :
+               agendarTipo === 'nao_respondeu' ? 'Voltar para Funil: Não Respondeu' :
+               'Voltar para Funil: Orçamento Sumiu'}
             </DialogTitle>
           </DialogHeader>
           <div className="py-4">
