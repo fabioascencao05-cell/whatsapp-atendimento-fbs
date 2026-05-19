@@ -40,6 +40,12 @@ export default function FollowUpPage() {
   const [leadMensagens, setLeadMensagens] = useState<Mensagem[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
 
+  // Modal de Agendamento Customizado (Substitui prompt)
+  const [agendarModalOpen, setAgendarModalOpen] = useState(false);
+  const [agendarLeadId, setAgendarLeadId] = useState('');
+  const [agendarTipo, setAgendarTipo] = useState('');
+  const [agendarDias, setAgendarDias] = useState('30');
+
   useEffect(() => {
     carregarDados();
   }, []);
@@ -69,7 +75,8 @@ export default function FollowUpPage() {
   }
 
   // Kanban Columns
-  const funisAtivos = useMemo(() => conversas.filter(c => c.funil_tipo === 'nao_respondeu' || c.funil_tipo === 'orcamento_sumiu'), [conversas]);
+  const funilNaoRespondeu = useMemo(() => conversas.filter(c => c.funil_tipo === 'nao_respondeu'), [conversas]);
+  const funilOrcamentoSumiu = useMemo(() => conversas.filter(c => c.funil_tipo === 'orcamento_sumiu'), [conversas]);
   const leadsNaoFechou = useMemo(() => conversas.filter(c => c.status_kanban === 'Não Fechou' && !c.funil_tipo), [conversas]);
   const leadsRecorrentes = useMemo(() => conversas.filter(c => c.funil_tipo === 'recorrente'), [conversas]);
   const leadsReativacao = useMemo(() => conversas.filter(c => c.funil_tipo === 'reativacao'), [conversas]);
@@ -125,21 +132,19 @@ export default function FollowUpPage() {
     }
   }
 
-  async function onDropToFunil(leadId: string, tipo: string) {
-    let dias = '30';
-    if (tipo === 'recorrente') {
-      const resp = prompt('Enviar mensagem recorrente a cada quantos dias?', '30');
-      if (!resp) return;
-      dias = resp;
-    } else if (tipo === 'reativacao') {
-      const resp = prompt('Reativar este cliente (Igrejas/Empresas) em quantos dias?', '30');
-      if (!resp) return;
-      dias = resp;
-    }
+  function prepararAgendamento(leadId: string, tipo: string) {
+    setAgendarLeadId(leadId);
+    setAgendarTipo(tipo);
+    setAgendarDias('30');
+    setAgendarModalOpen(true);
+  }
 
+  async function handleConfirmarAgendamento() {
+    if (!agendarLeadId || !agendarDias) return;
     try {
-      await ativarFunil(leadId, tipo, parseInt(dias));
-      toast.success(`Adicionado ao funil de ${tipo}!`);
+      await ativarFunil(agendarLeadId, agendarTipo, parseInt(agendarDias));
+      toast.success(`Adicionado ao funil de ${agendarTipo}!`);
+      setAgendarModalOpen(false);
       carregarDados();
     } catch (err) {
       toast.error('Erro ao agendar');
@@ -176,7 +181,7 @@ export default function FollowUpPage() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-foreground">CRM Follow-up</h1>
-              <p className="text-xs text-muted-foreground">Arraste os leads para organizar envios automáticos</p>
+              <p className="text-xs text-muted-foreground">Acompanhe e organize envios automáticos e manuais</p>
             </div>
           </div>
           <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
@@ -209,21 +214,17 @@ export default function FollowUpPage() {
       </header>
 
       {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto p-6">
-        <div className="flex h-full gap-4 min-w-[1200px]">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+        <div className="flex h-full gap-4 min-w-max pb-2">
           
-          {/* COLUNA 1: FUNIS ATIVOS (ROBÔ) */}
-          <div className="w-1/4 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm">
+          {/* COLUNA 1: NÃO RESPONDEU */}
+          <div className="w-72 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm flex-none">
             <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
-              <div className="flex items-center gap-2"><RefreshCw size={16} className="text-blue-500"/><span>Funil Automático</span></div>
-              <Badge variant="secondary">{funisAtivos.length}</Badge>
+              <div className="flex items-center gap-2"><RefreshCw size={16} className="text-blue-500"/><span>Não Respondeu</span></div>
+              <Badge variant="secondary">{funilNaoRespondeu.length}</Badge>
             </div>
-            <div className="p-2 bg-muted/30 text-[11px] text-muted-foreground border-b text-center">
-              Aguardando resposta do lead (Não Respondeu / Orçamento)
-            </div>
-            <ScrollArea className="flex-1 p-3">
-              <div className="space-y-3 pb-10">
-                {funisAtivos.map(lead => (
+            <div className="flex-1 p-3 overflow-y-auto space-y-3">
+                {funilNaoRespondeu.map(lead => (
                   <div key={lead.id} className="bg-card border p-3 rounded-lg flex flex-col gap-2 shadow-sm hover:border-blue-500/50 transition-colors cursor-pointer" onClick={() => abrirChatLateral(lead)}>
                     <div className="flex justify-between items-start">
                       <span className="font-semibold text-sm">{lead.nome}</span>
@@ -237,21 +238,43 @@ export default function FollowUpPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
+            </div>
           </div>
 
-          {/* COLUNA 2: NÃO FECHOU (FIM DE FUNIL) */}
-          <div className="w-1/4 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) sairFunil(id).then(carregarDados); }}>
+          {/* COLUNA 2: ORÇAMENTO SUMIU */}
+          <div className="w-72 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm flex-none">
+            <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
+              <div className="flex items-center gap-2"><RefreshCw size={16} className="text-orange-500"/><span>Orçamento Sumiu</span></div>
+              <Badge variant="secondary">{funilOrcamentoSumiu.length}</Badge>
+            </div>
+            <div className="flex-1 p-3 overflow-y-auto space-y-3">
+                {funilOrcamentoSumiu.map(lead => (
+                  <div key={lead.id} className="bg-card border p-3 rounded-lg flex flex-col gap-2 shadow-sm hover:border-orange-500/50 transition-colors cursor-pointer" onClick={() => abrirChatLateral(lead)}>
+                    <div className="flex justify-between items-start">
+                      <span className="font-semibold text-sm">{lead.nome}</span>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleSairDoFunil(lead.id); }} title="Sair do Funil (Parar Robô)">
+                        <PowerOff size={14} />
+                      </Button>
+                    </div>
+                    <div className="flex justify-between items-end text-xs">
+                      <span className="text-muted-foreground">Etapa: {lead.funil_step}</span>
+                      <span className="text-orange-500 font-medium">{formatarData(lead.funil_proximo!)}</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          {/* COLUNA 3: NÃO FECHOU (FIM DE FUNIL) */}
+          <div className="w-72 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm flex-none" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) sairFunil(id).then(carregarDados); }}>
             <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
               <div className="flex items-center gap-2"><GitBranch size={16} className="text-primary"/><span>Não Fechou</span></div>
               <Badge variant="secondary">{leadsNaoFechou.length}</Badge>
             </div>
             <div className="p-2 bg-muted/30 text-[11px] text-muted-foreground border-b text-center">
-              Finalizados. Arraste para a direita para reagendar.
+              Arraste para as próximas colunas para reagendar.
             </div>
-            <ScrollArea className="flex-1 p-3">
-              <div className="space-y-3 pb-10">
+            <div className="flex-1 p-3 overflow-y-auto space-y-3">
                 {leadsNaoFechou.map(lead => (
                   <div 
                     key={lead.id}
@@ -272,23 +295,27 @@ export default function FollowUpPage() {
                     <span className="text-xs text-muted-foreground ml-6">{lead.telefone}</span>
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
+            </div>
           </div>
 
-          {/* COLUNA 3: RECORRENTES */}
-          <div className="w-1/4 flex flex-col bg-primary/5 border border-primary/20 rounded-xl overflow-hidden shadow-sm" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) onDropToFunil(id, 'recorrente'); }}>
+          {/* COLUNA 4: RECORRENTES */}
+          <div className="w-72 flex flex-col bg-primary/5 border border-primary/20 rounded-xl overflow-hidden shadow-sm flex-none" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) prepararAgendamento(id, 'recorrente'); }}>
             <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
               <div className="flex items-center gap-2"><CalendarClock size={16} className="text-primary"/><span>Recorrentes</span></div>
               <Badge variant="default">{leadsRecorrentes.length}</Badge>
             </div>
-            <div className="p-2 bg-muted/30 text-[11px] text-muted-foreground border-b text-center">
-              Arraste para cá (Mensagem Padrão Recorrente)
+            <div className="p-2 bg-muted/30 text-[11px] text-primary/80 border-b text-center">
+              Solte aqui (MENSAGEM RECORRENTE)
             </div>
-            <ScrollArea className="flex-1 p-3">
-              <div className="space-y-3 pb-10">
+            <div className="flex-1 p-3 overflow-y-auto space-y-3">
                 {leadsRecorrentes.map(lead => (
-                  <div key={lead.id} className="bg-card border p-3 rounded-lg flex justify-between items-center shadow-sm cursor-pointer hover:border-primary/50" onClick={() => abrirChatLateral(lead)}>
+                  <div 
+                    key={lead.id} 
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('leadId', lead.id)}
+                    className="bg-card border p-3 rounded-lg flex justify-between items-center shadow-sm cursor-grab hover:border-primary/50" 
+                    onClick={() => abrirChatLateral(lead)}
+                  >
                     <div>
                       <span className="font-semibold text-sm block">{lead.nome}</span>
                       <span className="text-xs text-primary">Próx: {formatarData(lead.funil_proximo!)}</span>
@@ -298,23 +325,27 @@ export default function FollowUpPage() {
                     </Button>
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
+            </div>
           </div>
 
-          {/* COLUNA 4: REATIVAÇÃO (IGREJAS/EMPRESAS) */}
-          <div className="w-1/4 flex flex-col bg-emerald-500/5 border border-emerald-500/20 rounded-xl overflow-hidden shadow-sm" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) onDropToFunil(id, 'reativacao'); }}>
+          {/* COLUNA 5: REATIVAÇÃO (IGREJAS/EMPRESAS) */}
+          <div className="w-72 flex flex-col bg-emerald-500/5 border border-emerald-500/20 rounded-xl overflow-hidden shadow-sm flex-none" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) prepararAgendamento(id, 'reativacao'); }}>
             <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
               <div className="flex items-center gap-2"><MessageSquare size={16} className="text-emerald-500"/><span>Reativação</span></div>
               <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 bg-emerald-500/10">{leadsReativacao.length}</Badge>
             </div>
             <div className="p-2 bg-muted/30 text-[11px] text-emerald-600/70 border-b text-center">
-              Arraste para cá (Mensagem P/ Igrejas/Empresas)
+              Solte aqui (EMPRESAS / IGREJAS)
             </div>
-            <ScrollArea className="flex-1 p-3">
-              <div className="space-y-3 pb-10">
+            <div className="flex-1 p-3 overflow-y-auto space-y-3">
                 {leadsReativacao.map(lead => (
-                  <div key={lead.id} className="bg-card border p-3 rounded-lg flex justify-between items-center shadow-sm cursor-pointer hover:border-emerald-500/50" onClick={() => abrirChatLateral(lead)}>
+                  <div 
+                    key={lead.id} 
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('leadId', lead.id)}
+                    className="bg-card border p-3 rounded-lg flex justify-between items-center shadow-sm cursor-grab hover:border-emerald-500/50" 
+                    onClick={() => abrirChatLateral(lead)}
+                  >
                     <div>
                       <span className="font-semibold text-sm block">{lead.nome}</span>
                       <span className="text-xs text-emerald-600">Próx: {formatarData(lead.funil_proximo!)}</span>
@@ -324,15 +355,14 @@ export default function FollowUpPage() {
                     </Button>
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
+            </div>
           </div>
 
         </div>
       </div>
 
       {/* Histórico Manual (Rodapé compacto) */}
-      <div className="h-48 border-t bg-card/30 flex flex-col flex-none">
+      <div className="h-40 border-t bg-card/30 flex flex-col flex-none">
         <div className="p-2 bg-card border-b font-semibold text-xs text-muted-foreground flex justify-between items-center">
           <span className="uppercase tracking-wider">Histórico de Follow-ups Manuais</span>
           <Badge variant="secondary">{followupsConcluidos.length}</Badge>
@@ -357,6 +387,35 @@ export default function FollowUpPage() {
           )}
         </ScrollArea>
       </div>
+
+      {/* Modal de Agendamento Customizado (Substitui o window.prompt) */}
+      <Dialog open={agendarModalOpen} onOpenChange={setAgendarModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {agendarTipo === 'recorrente' ? 'Agendar Mensagem Recorrente' : 'Agendar Reativação (Igrejas/Empresas)'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              De quantos em quantos dias você quer que o robô envie esta mensagem?
+            </p>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold">Intervalo em dias</label>
+              <Input 
+                type="number" 
+                value={agendarDias} 
+                onChange={e => setAgendarDias(e.target.value)} 
+                min="1"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setAgendarModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleConfirmarAgendamento}>Salvar Agendamento</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Sheet de Chat Lateral */}
       <Sheet open={selectedLead !== null} onOpenChange={(val) => { if (!val) setSelectedLead(null); }}>

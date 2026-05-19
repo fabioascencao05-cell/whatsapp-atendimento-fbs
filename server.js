@@ -958,7 +958,19 @@ app.post('/api/conversas/:id/kanban', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     try {
-        await prisma.conversa.update({ where: { id }, data: { status_kanban: status } });
+        const updateData = { status_kanban: status };
+        if (status === 'Pedido Entregue') {
+            updateData.funil_tipo = 'recorrente';
+            updateData.funil_step = 1;
+            updateData.funil_proximo = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+            updateData.funil_ultimo_disparo = null;
+        } else if (status === 'Finalizados') {
+            // Se mover para finalizados, tirar de funis ativos
+            updateData.funil_tipo = null;
+            updateData.funil_step = null;
+            updateData.funil_proximo = null;
+        }
+        await prisma.conversa.update({ where: { id }, data: updateData });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1536,19 +1548,31 @@ cron.schedule('*/5 * * * *', async () => {
 
                 if (!msgAtual) {
                     // Acabou as mensagens do funil — lead não respondeu nenhuma
+                    let novoFunil = null;
+                    let novoStep = null;
+                    let novoProximo = null;
                     const novoStatus = (lead.funil_tipo === 'recorrente') ? lead.status_kanban : 'Não Fechou';
+
+                    if (lead.funil_tipo === 'recorrente') {
+                        novoFunil = 'recorrente';
+                        novoStep = 1;
+                        novoProximo = new Date(agora.getTime() + 90 * 24 * 60 * 60 * 1000);
+                    } else if (lead.funil_tipo === 'nao_respondeu' || lead.funil_tipo === 'orcamento_sumiu') {
+                        novoFunil = 'reativacao';
+                        novoStep = 1;
+                        novoProximo = new Date(agora.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 dias
+                    }
+
                     await prisma.conversa.update({
                         where: { id: lead.id },
                         data: {
-                            funil_tipo: lead.funil_tipo === 'recorrente' ? 'recorrente' : null,
-                            funil_step: lead.funil_tipo === 'recorrente' ? 1 : null,
-                            funil_proximo: lead.funil_tipo === 'recorrente'
-                                ? new Date(agora.getTime() + 90 * 24 * 60 * 60 * 1000)
-                                : null,
+                            funil_tipo: novoFunil,
+                            funil_step: novoStep,
+                            funil_proximo: novoProximo,
                             status_kanban: novoStatus,
                         }
                     });
-                    console.log(`🔚 Funil encerrado para ${lead.nome} (${lead.funil_tipo}) — status: ${novoStatus}`);
+                    console.log(`🔚 Funil encerrado para ${lead.nome} (${lead.funil_tipo}) — auto-movido para: ${novoFunil || 'null'}`);
                     continue;
                 }
 
