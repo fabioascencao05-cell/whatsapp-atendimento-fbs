@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Image, Video, Clock, Trash2, ArrowLeft, X, CalendarClock, Power, PowerOff, Mic, Columns3, Check, CheckCheck, Smartphone, User, Bot } from 'lucide-react';
+import { Send, Paperclip, Image, Video, Clock, Trash2, ArrowLeft, X, CalendarClock, Power, PowerOff, Mic, Columns3, Check, CheckCheck, Smartphone, User, Bot, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -59,6 +59,7 @@ function getDayKey(d: string) {
 export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, onConversaUpdate, onBack, onOpenPanel, onDelete }: Props) {
   const { etiquetas } = useEtiquetas();
   const [texto, setTexto] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
@@ -102,6 +103,9 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
 
   const handleSend = async () => {
     if (!texto.trim() && attachments.length === 0) return;
+    if (isSending) return;
+    
+    setIsSending(true);
 
     if (showSchedule && scheduleDate && scheduleTime) {
       const dt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
@@ -114,20 +118,34 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
           proximo_followup: dt,
           tag_automatica: autoTag || undefined
         });
+        
+        if (autoTag) {
+          await mudarKanban(conversa.id, autoTag);
+          onConversaUpdate({ ...conversa, status_kanban: autoTag });
+        }
+
         toast.success(`Agendado para ${scheduleDate} ${scheduleTime}`);
         setShowSchedule(false);
         setTexto('');
       } catch (err) {
         toast.error('Erro ao agendar');
+      } finally {
+        setIsSending(false);
       }
       return;
     }
 
-    const msg = await enviarMensagem(conversa.id, texto.trim());
-    onMensagemEnviada(msg);
-    setTexto('');
-    setShowQuick(false);
-    setAttachments([]);
+    try {
+      const msg = await enviarMensagem(conversa.id, texto.trim());
+      onMensagemEnviada(msg);
+      setTexto('');
+      setShowQuick(false);
+      setAttachments([]);
+    } catch (err) {
+      toast.error('Erro ao enviar mensagem');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleToggleBot = async () => {
@@ -492,9 +510,9 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
             />
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" className="text-[10px] h-7 font-bold uppercase" onClick={() => setShowSchedule(false)}>Cancelar</Button>
-            <Button size="sm" className="text-[10px] h-7 font-bold uppercase gap-1" onClick={handleSend} disabled={!texto.trim()}>
-              <CalendarClock size={14} /> Confirmar e Agendar
+            <Button variant="ghost" size="sm" className="text-[10px] h-7 font-bold uppercase" onClick={() => setShowSchedule(false)} disabled={isSending}>Cancelar</Button>
+            <Button size="sm" className="text-[10px] h-7 font-bold uppercase gap-1" onClick={handleSend} disabled={!texto.trim() || isSending}>
+              <CalendarClock size={14} /> {isSending ? 'Agendando...' : 'Confirmar e Agendar'}
             </Button>
           </div>
         </div>
@@ -555,10 +573,10 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
         <Button
           size="icon"
           onClick={handleSend}
-          disabled={!texto.trim() && attachments.length === 0}
+          disabled={(!texto.trim() && attachments.length === 0) || isSending}
           className="bg-primary hover:bg-primary/90 shrink-0 h-10 w-10 rounded-xl shadow-sm disabled:opacity-40"
         >
-          <Send size={16} className="text-primary-foreground" />
+          {isSending ? <Loader2 size={16} className="text-primary-foreground animate-spin" /> : <Send size={16} className="text-primary-foreground" />}
         </Button>
       </div>
       )}

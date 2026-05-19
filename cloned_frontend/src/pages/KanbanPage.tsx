@@ -4,10 +4,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { fetchConversas, mudarKanban } from '@/services/api';
-import type { Conversa } from '@/types/crm';
+import { fetchConversas, mudarKanban, fetchMensagens, fetchRespostas } from '@/services/api';
+import type { Conversa, Mensagem, RespostaRapida } from '@/types/crm';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { ChatArea } from '@/components/chat/ChatArea';
 
 interface PipelineCol {
   id: number;
@@ -47,13 +49,30 @@ export default function KanbanPage() {
   const [editName, setEditName] = useState('');
   const [editCor, setEditCor] = useState('');
 
+  // Side Chat State
+  const [activeChat, setActiveChat] = useState<Conversa | null>(null);
+  const [mensagens, setMensagens] = useState<Mensagem[]>([]);
+  const [respostas, setRespostas] = useState<RespostaRapida[]>([]);
+
   const loadData = async () => {
-    const [convs, cols] = await Promise.all([
+    const [convs, cols, resp] = await Promise.all([
       fetchConversas(),
-      fetch('/api/pipeline').then(r => r.json())
+      fetch('/api/pipeline').then(r => r.json()),
+      fetchRespostas()
     ]);
     setConversas(convs);
     setColumns(cols);
+    setRespostas(resp);
+  };
+
+  const handleOpenChat = async (c: Conversa) => {
+    setActiveChat(c);
+    try {
+      const data = await fetchMensagens(c.id);
+      setMensagens(data.mensagens || []);
+    } catch (err) {
+      toast.error('Erro ao carregar mensagens');
+    }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -257,6 +276,7 @@ export default function KanbanPage() {
                       'bg-card rounded-xl p-4 shadow-sm border border-border/50 cursor-grab active:cursor-grabbing hover:shadow-md hover:border-primary/30 transition-all group',
                       dragItem === c.id ? 'opacity-30 scale-95' : 'opacity-100'
                     )}
+                    onClick={() => handleOpenChat(c)}
                   >
                     <div className="space-y-3">
                       <div className="flex items-start justify-between gap-2">
@@ -286,7 +306,7 @@ export default function KanbanPage() {
                           <CalendarClock size={12} className="text-muted-foreground/60" />
                           {formatWhatsAppDate(c.atualizado_em)}
                         </div>
-                        <button onClick={() => navigate(`/?chat=${c.id}`)} className="flex items-center gap-1 text-[10px] font-bold text-primary hover:opacity-80 transition-opacity">
+                        <button onClick={(e) => { e.stopPropagation(); handleOpenChat(c); }} className="flex items-center gap-1 text-[10px] font-bold text-primary hover:opacity-80 transition-opacity">
                           <MessageCircle size={12} /> Chat
                         </button>
                       </div>
@@ -304,6 +324,29 @@ export default function KanbanPage() {
           );
         })}
       </div>
+
+      {/* Side Chat Panel */}
+      <Sheet open={activeChat !== null} onOpenChange={(val) => { if (!val) setActiveChat(null); }}>
+        <SheetContent side="right" className="w-[400px] sm:w-[540px] p-0 flex flex-col h-full bg-background border-l-0 shadow-2xl">
+          {activeChat && (
+            <ChatArea 
+              conversa={activeChat}
+              mensagens={mensagens}
+              respostas={respostas}
+              onMensagemEnviada={(m) => setMensagens(prev => [...prev, m])}
+              onConversaUpdate={(c) => {
+                setActiveChat(c);
+                setConversas(prev => prev.map(x => x.id === c.id ? c : x));
+              }}
+              onBack={() => setActiveChat(null)}
+              onDelete={(id) => {
+                setConversas(prev => prev.filter(x => x.id !== id));
+                setActiveChat(null);
+              }}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
