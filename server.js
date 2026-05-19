@@ -1324,15 +1324,19 @@ const FUNIL_MSGS_DEFAULT = {
     recorrente: [
         { horas: 24 * 90, texto: 'Oi! Tudo bem? 😊 Passou um tempinho desde nosso último pedido. Está precisando de novas camisetas personalizadas?' },
     ],
+    reativacao: [
+        { horas: 24 * 30, texto: 'Olá! Se precisar de camisetas para sua empresa ou igreja estaremos à disposição para atender.' }
+    ]
 };
 
 function carregarFunilMsgs() {
+    let msgs = { ...FUNIL_MSGS_DEFAULT };
     try {
         if (fs.existsSync(FUNIL_MSGS_PATH)) {
-            return JSON.parse(fs.readFileSync(FUNIL_MSGS_PATH, 'utf8'));
+            msgs = { ...msgs, ...JSON.parse(fs.readFileSync(FUNIL_MSGS_PATH, 'utf8')) };
         }
     } catch {}
-    return FUNIL_MSGS_DEFAULT;
+    return msgs;
 }
 
 app.get('/api/funil-msgs', (req, res) => {
@@ -1398,6 +1402,7 @@ app.get('/api/funil-stats', async (req, res) => {
             nao_respondeu: leads.filter(l => l.funil_tipo === 'nao_respondeu'),
             orcamento_sumiu: leads.filter(l => l.funil_tipo === 'orcamento_sumiu'),
             recorrente: leads.filter(l => l.funil_tipo === 'recorrente'),
+            reativacao: leads.filter(l => l.funil_tipo === 'reativacao'),
         };
         res.json(stats);
     } catch (err) { res.status(500).json({ error: err.message }); }

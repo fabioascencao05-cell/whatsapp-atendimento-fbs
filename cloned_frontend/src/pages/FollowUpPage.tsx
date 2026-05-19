@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { CalendarClock, Plus, Trash2, Clock, CheckCircle2, XCircle, AlertCircle, GitBranch, RefreshCw, GripVertical } from 'lucide-react';
+import { CalendarClock, Plus, Trash2, Clock, CheckCircle2, XCircle, AlertCircle, GitBranch, RefreshCw, GripVertical, MessageSquare, PowerOff } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { fetchConversas, fetchFollowUps, criarFollowUp, cancelarFollowUp, deletarFollowUp, agendarRecorrente, mudarKanban } from '@/services/api';
-import type { Conversa } from '@/types/crm';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { fetchConversas, fetchFollowUps, fetchMensagens, criarFollowUp, cancelarFollowUp, deletarFollowUp, ativarFunil, mudarKanban, sairFunil } from '@/services/api';
+import type { Conversa, Mensagem } from '@/types/crm';
 import { toast } from 'sonner';
 
 interface FollowUpItem {
@@ -21,12 +21,7 @@ interface FollowUpItem {
   tentativas: number;
   criado_em: string;
   enviado_em?: string;
-  conversa?: {
-    nome: string;
-    telefone: string;
-    profile_pic_url?: string;
-    status_kanban: string;
-  };
+  conversa?: Conversa;
 }
 
 export default function FollowUpPage() {
@@ -39,6 +34,11 @@ export default function FollowUpPage() {
   const [novoConversaId, setNovoConversaId] = useState('');
   const [novoTexto, setNovoTexto] = useState('');
   const [novoHoras, setNovoHoras] = useState('24');
+
+  // Sheet do Chat Lateral
+  const [selectedLead, setSelectedLead] = useState<Conversa | null>(null);
+  const [leadMensagens, setLeadMensagens] = useState<Mensagem[]>([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -56,23 +56,24 @@ export default function FollowUpPage() {
     setLoading(false);
   }
 
-  const funisAgrupados = useMemo(() => {
-    const mapa: Record<string, Conversa[]> = {
-      'nao_respondeu': [],
-      'orcamento_sumiu': []
-    };
-    conversas.forEach(c => {
-      const tipo = c.funil_tipo;
-      if (tipo && mapa[tipo]) {
-        mapa[tipo].push(c);
-      }
-    });
-    return mapa;
-  }, [conversas]);
+  async function abrirChatLateral(lead: Conversa) {
+    setSelectedLead(lead);
+    setLoadingMsgs(true);
+    try {
+      const data = await fetchMensagens(lead.id);
+      setLeadMensagens(data.mensagens || []);
+    } catch (err) {
+      toast.error('Erro ao carregar mensagens');
+    }
+    setLoadingMsgs(false);
+  }
 
+  // Kanban Columns
+  const funisAtivos = useMemo(() => conversas.filter(c => c.funil_tipo === 'nao_respondeu' || c.funil_tipo === 'orcamento_sumiu'), [conversas]);
   const leadsNaoFechou = useMemo(() => conversas.filter(c => c.status_kanban === 'Não Fechou' && !c.funil_tipo), [conversas]);
   const leadsRecorrentes = useMemo(() => conversas.filter(c => c.funil_tipo === 'recorrente'), [conversas]);
-  const followupsAtivos = useMemo(() => followups.filter(f => f.status === 'pendente'), [followups]);
+  const leadsReativacao = useMemo(() => conversas.filter(c => c.funil_tipo === 'reativacao'), [conversas]);
+
   const followupsConcluidos = useMemo(() => followups.filter(f => f.status === 'enviado' || f.status === 'cancelado'), [followups]);
 
   async function handleCriarFollowUp() {
@@ -92,16 +93,6 @@ export default function FollowUpPage() {
     }
   }
 
-  async function handleCancelar(id: string) {
-    try {
-      await cancelarFollowUp(id);
-      carregarDados();
-      toast.success('Follow-up cancelado');
-    } catch (err) {
-      toast.error('Erro ao cancelar');
-    }
-  }
-
   async function handleDeletar(id: string) {
     try {
       await deletarFollowUp(id);
@@ -112,42 +103,51 @@ export default function FollowUpPage() {
     }
   }
 
+  async function handleSairDoFunil(id: string) {
+    if (!confirm('Deseja retirar este cliente do funil automático? Ele irá para Não Fechou.')) return;
+    try {
+      await sairFunil(id);
+      carregarDados();
+      toast.success('Cliente retirado do funil');
+    } catch (err) {
+      toast.error('Erro ao retirar do funil');
+    }
+  }
+
   async function handleExcluirCliente(id: string) {
-    if (!confirm('Deseja excluir este cliente da lista de acompanhamento (move para Finalizados)?')) return;
+    if (!confirm('Deseja excluir este cliente (mover para Finalizados)?')) return;
     try {
       await mudarKanban(id, 'Finalizados');
       carregarDados();
-      toast.success('Cliente excluído do acompanhamento');
+      toast.success('Cliente arquivado');
     } catch (err) {
-      toast.error('Erro ao excluir cliente');
+      toast.error('Erro ao arquivar cliente');
     }
   }
 
-  async function handlePararRecorrente(id: string) {
-    if (!confirm('Deseja parar os envios recorrentes para este cliente?')) return;
-    try {
-      // Mover para 'Finalizados' ou 'Não Fechou' novamente. Vamos mover para Finalizados para tirar do funil e do acompanhamento
-      await mudarKanban(id, 'Finalizados');
-      carregarDados();
-      toast.success('Recorrência cancelada');
-    } catch (err) {
-      toast.error('Erro ao cancelar recorrência');
+  async function onDropToFunil(leadId: string, tipo: string) {
+    let dias = '30';
+    if (tipo === 'recorrente') {
+      const resp = prompt('Enviar mensagem recorrente a cada quantos dias?', '30');
+      if (!resp) return;
+      dias = resp;
+    } else if (tipo === 'reativacao') {
+      const resp = prompt('Reativar este cliente (Igrejas/Empresas) em quantos dias?', '30');
+      if (!resp) return;
+      dias = resp;
     }
-  }
 
-  async function onDropToRecorrente(leadId: string) {
-    const dias = prompt('Enviar mensagem recorrente a cada quantos dias?', '30');
-    if (!dias) return;
     try {
-      await agendarRecorrente(leadId, parseInt(dias));
-      toast.success('Funil recorrente ativado!');
+      await ativarFunil(leadId, tipo, parseInt(dias));
+      toast.success(`Adicionado ao funil de ${tipo}!`);
       carregarDados();
     } catch (err) {
-      toast.error('Erro ao agendar recorrente');
+      toast.error('Erro ao agendar');
     }
   }
 
   function formatarData(iso: string) {
+    if (!iso) return '';
     const d = new Date(iso);
     const agora = new Date();
     const diff = d.getTime() - agora.getTime();
@@ -163,100 +163,28 @@ export default function FollowUpPage() {
     return `em ${Math.round(horas / 24)}d`;
   }
 
-  const RenderFollowupList = ({ items }: { items: FollowUpItem[] }) => {
-    if (items.length === 0) {
-      return (
-        <Card className="border-dashed">
-          <CardContent className="p-8 text-center text-muted-foreground text-sm">
-            <CalendarClock className="mx-auto mb-3 opacity-30" size={40} />
-            Nenhum follow-up nesta lista.
-          </CardContent>
-        </Card>
-      );
-    }
-    return (
-      <div className="space-y-2">
-        {items.map(fu => {
-          const isAtrasado = fu.status === 'pendente' && new Date(fu.agendado_para) < new Date();
-          return (
-            <Card key={fu.id} className={`transition-colors ${isAtrasado ? 'border-red-500/30' : ''}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-none ${
-                    fu.status === 'enviado' ? 'bg-emerald-500/15 text-emerald-400' :
-                    fu.status === 'cancelado' ? 'bg-zinc-500/15 text-zinc-400' :
-                    isAtrasado ? 'bg-red-500/15 text-red-400' :
-                    'bg-primary/15 text-primary'
-                  }`}>
-                    {fu.status === 'enviado' ? <CheckCircle2 size={18} /> :
-                     fu.status === 'cancelado' ? <XCircle size={18} /> :
-                     isAtrasado ? <AlertCircle size={18} /> :
-                     <Clock size={18} />}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm text-foreground">
-                        {fu.conversa?.nome || 'Contato'}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {fu.conversa?.telefone}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2 mb-1.5">
-                      {fu.texto}
-                    </p>
-                    <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                      <span className={`flex items-center gap-1 ${isAtrasado ? 'text-red-400 font-medium' : ''}`}>
-                        <Clock size={10} />
-                        {fu.status === 'enviado' && fu.enviado_em
-                          ? `Enviado ${formatarData(fu.enviado_em)}`
-                          : formatarData(fu.agendado_para)
-                        }
-                      </span>
-                    </div>
-                  </div>
-
-                  {fu.status === 'pendente' && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400" onClick={() => handleCancelar(fu.id)}>
-                      <XCircle size={14} />
-                    </Button>
-                  )}
-                  {(fu.status === 'enviado' || fu.status === 'cancelado') && (
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-red-400" onClick={() => handleDeletar(fu.id)}>
-                      <Trash2 size={14} />
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    );
-  };
-
   if (loading) return <div className="flex-1 flex items-center justify-center"><RefreshCw className="animate-spin text-primary" size={32} /></div>;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-background">
-      <header className="px-6 py-5 border-b border-border/50 bg-card/30">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
+      {/* Header */}
+      <header className="px-6 py-4 border-b border-border/50 bg-card/30 flex-none">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
               <GitBranch size={20} className="text-primary" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-foreground">Central de Follow-Up</h1>
-              <p className="text-xs text-muted-foreground">Acompanhamento de clientes</p>
+              <h1 className="text-lg font-bold text-foreground">CRM Follow-up</h1>
+              <p className="text-xs text-muted-foreground">Arraste os leads para organizar envios automáticos</p>
             </div>
           </div>
           <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" className="h-8 text-xs"><Plus size={14} className="mr-1"/> Novo Agendamento</Button>
+              <Button size="sm" className="h-8 text-xs"><Plus size={14} className="mr-1"/> Agendamento Manual</Button>
             </DialogTrigger>
             <DialogContent className="max-w-sm">
-              <DialogHeader><DialogTitle>Agendar Follow-up</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Agendar Follow-up Único</DialogTitle></DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold">Cliente</label>
@@ -280,137 +208,203 @@ export default function FollowUpPage() {
         </div>
       </header>
 
-      <Tabs defaultValue="ativos" className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="px-6 py-2 border-b">
-          <TabsList>
-            <TabsTrigger value="ativos">Em Andamento</TabsTrigger>
-            <TabsTrigger value="concluidos">Concluídos & Recorrentes</TabsTrigger>
-          </TabsList>
-        </div>
+      {/* Kanban Board */}
+      <div className="flex-1 overflow-x-auto p-6">
+        <div className="flex h-full gap-4 min-w-[1200px]">
+          
+          {/* COLUNA 1: FUNIS ATIVOS (ROBÔ) */}
+          <div className="w-1/4 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm">
+            <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
+              <div className="flex items-center gap-2"><RefreshCw size={16} className="text-blue-500"/><span>Funil Automático</span></div>
+              <Badge variant="secondary">{funisAtivos.length}</Badge>
+            </div>
+            <div className="p-2 bg-muted/30 text-[11px] text-muted-foreground border-b text-center">
+              Aguardando resposta do lead (Não Respondeu / Orçamento)
+            </div>
+            <ScrollArea className="flex-1 p-3">
+              <div className="space-y-3 pb-10">
+                {funisAtivos.map(lead => (
+                  <div key={lead.id} className="bg-card border p-3 rounded-lg flex flex-col gap-2 shadow-sm hover:border-blue-500/50 transition-colors cursor-pointer" onClick={() => abrirChatLateral(lead)}>
+                    <div className="flex justify-between items-start">
+                      <span className="font-semibold text-sm">{lead.nome}</span>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleSairDoFunil(lead.id); }} title="Sair do Funil (Parar Robô)">
+                        <PowerOff size={14} />
+                      </Button>
+                    </div>
+                    <div className="flex justify-between items-end text-xs">
+                      <span className="text-muted-foreground">Etapa: {lead.funil_step}</span>
+                      <span className="text-blue-500 font-medium">{formatarData(lead.funil_proximo!)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
 
-        <TabsContent value="ativos" className="p-6 m-0 h-full overflow-y-auto">
-          <div className="space-y-8 max-w-4xl mx-auto pb-10">
-            <div>
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Funis Automáticos (Robô)</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {['nao_respondeu', 'orcamento_sumiu'].map(tipo => {
-                  const leads = funisAgrupados[tipo];
-                  const info = tipo === 'nao_respondeu' ? { nome: 'Não Respondeu', icon: '🔴' } : { nome: 'Orçamento Sumiu', icon: '🟡' };
+          {/* COLUNA 2: NÃO FECHOU (FIM DE FUNIL) */}
+          <div className="w-1/4 flex flex-col bg-muted/20 border rounded-xl overflow-hidden shadow-sm" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) sairFunil(id).then(carregarDados); }}>
+            <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
+              <div className="flex items-center gap-2"><GitBranch size={16} className="text-primary"/><span>Não Fechou</span></div>
+              <Badge variant="secondary">{leadsNaoFechou.length}</Badge>
+            </div>
+            <div className="p-2 bg-muted/30 text-[11px] text-muted-foreground border-b text-center">
+              Finalizados. Arraste para a direita para reagendar.
+            </div>
+            <ScrollArea className="flex-1 p-3">
+              <div className="space-y-3 pb-10">
+                {leadsNaoFechou.map(lead => (
+                  <div 
+                    key={lead.id}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('leadId', lead.id)}
+                    className="bg-card border p-3 rounded-lg flex flex-col gap-2 shadow-sm cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
+                    onClick={() => abrirChatLateral(lead)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center gap-2">
+                        <GripVertical size={14} className="text-muted-foreground/40" />
+                        <span className="font-semibold text-sm">{lead.nome}</span>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleExcluirCliente(lead.id); }} title="Arquivar">
+                        <Trash2 size={12} />
+                      </Button>
+                    </div>
+                    <span className="text-xs text-muted-foreground ml-6">{lead.telefone}</span>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* COLUNA 3: RECORRENTES */}
+          <div className="w-1/4 flex flex-col bg-primary/5 border border-primary/20 rounded-xl overflow-hidden shadow-sm" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) onDropToFunil(id, 'recorrente'); }}>
+            <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
+              <div className="flex items-center gap-2"><CalendarClock size={16} className="text-primary"/><span>Recorrentes</span></div>
+              <Badge variant="default">{leadsRecorrentes.length}</Badge>
+            </div>
+            <div className="p-2 bg-muted/30 text-[11px] text-muted-foreground border-b text-center">
+              Arraste para cá (Mensagem Padrão Recorrente)
+            </div>
+            <ScrollArea className="flex-1 p-3">
+              <div className="space-y-3 pb-10">
+                {leadsRecorrentes.map(lead => (
+                  <div key={lead.id} className="bg-card border p-3 rounded-lg flex justify-between items-center shadow-sm cursor-pointer hover:border-primary/50" onClick={() => abrirChatLateral(lead)}>
+                    <div>
+                      <span className="font-semibold text-sm block">{lead.nome}</span>
+                      <span className="text-xs text-primary">Próx: {formatarData(lead.funil_proximo!)}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleSairDoFunil(lead.id); }} title="Parar Recorrência">
+                      <XCircle size={14} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* COLUNA 4: REATIVAÇÃO (IGREJAS/EMPRESAS) */}
+          <div className="w-1/4 flex flex-col bg-emerald-500/5 border border-emerald-500/20 rounded-xl overflow-hidden shadow-sm" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData('leadId'); if (id) onDropToFunil(id, 'reativacao'); }}>
+            <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
+              <div className="flex items-center gap-2"><MessageSquare size={16} className="text-emerald-500"/><span>Reativação</span></div>
+              <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 bg-emerald-500/10">{leadsReativacao.length}</Badge>
+            </div>
+            <div className="p-2 bg-muted/30 text-[11px] text-emerald-600/70 border-b text-center">
+              Arraste para cá (Mensagem P/ Igrejas/Empresas)
+            </div>
+            <ScrollArea className="flex-1 p-3">
+              <div className="space-y-3 pb-10">
+                {leadsReativacao.map(lead => (
+                  <div key={lead.id} className="bg-card border p-3 rounded-lg flex justify-between items-center shadow-sm cursor-pointer hover:border-emerald-500/50" onClick={() => abrirChatLateral(lead)}>
+                    <div>
+                      <span className="font-semibold text-sm block">{lead.nome}</span>
+                      <span className="text-xs text-emerald-600">Próx: {formatarData(lead.funil_proximo!)}</span>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:text-red-500" onClick={(e) => { e.stopPropagation(); handleSairDoFunil(lead.id); }} title="Parar Reativação">
+                      <XCircle size={14} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Histórico Manual (Rodapé compacto) */}
+      <div className="h-48 border-t bg-card/30 flex flex-col flex-none">
+        <div className="p-2 bg-card border-b font-semibold text-xs text-muted-foreground flex justify-between items-center">
+          <span className="uppercase tracking-wider">Histórico de Follow-ups Manuais</span>
+          <Badge variant="secondary">{followupsConcluidos.length}</Badge>
+        </div>
+        <ScrollArea className="flex-1 p-3">
+          {followupsConcluidos.length === 0 ? (
+            <p className="text-xs text-center text-muted-foreground/50 mt-10">Nenhum histórico</p>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {followupsConcluidos.map(fu => (
+                <div key={fu.id} className="bg-card border p-2 rounded flex items-center justify-between min-w-[250px] max-w-[350px] shadow-sm">
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-xs">{fu.conversa?.nome}</span>
+                    <span className="text-[10px] text-muted-foreground truncate">{fu.texto}</span>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:text-red-500 ml-2" onClick={() => handleDeletar(fu.id)}>
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+
+      {/* Sheet de Chat Lateral */}
+      <Sheet open={selectedLead !== null} onOpenChange={(val) => { if (!val) setSelectedLead(null); }}>
+        <SheetContent className="w-[400px] sm:w-[540px] flex flex-col p-0">
+          <SheetHeader className="p-4 border-b flex-none">
+            <SheetTitle className="flex items-center gap-3">
+              {selectedLead?.profile_pic_url ? (
+                <img src={selectedLead.profile_pic_url} className="w-10 h-10 rounded-full" alt="" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                  {selectedLead?.nome?.charAt(0) || '?'}
+                </div>
+              )}
+              <div className="flex flex-col">
+                <span>{selectedLead?.nome}</span>
+                <span className="text-xs text-muted-foreground font-normal">{selectedLead?.telefone}</span>
+              </div>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto bg-muted/10 p-4">
+            {loadingMsgs ? (
+              <div className="flex items-center justify-center h-full"><RefreshCw className="animate-spin text-muted-foreground" /></div>
+            ) : leadMensagens.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm opacity-50">
+                <MessageSquare size={32} className="mb-2" />
+                Nenhuma mensagem
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 pb-4">
+                {leadMensagens.map(msg => {
+                  const isCliente = msg.origem === 'cliente';
                   return (
-                    <Card key={tipo} className="overflow-hidden border-border/50">
-                      <div className="bg-card p-3 border-b border-border/30 flex items-center justify-between">
-                        <div className="flex items-center gap-2"><span className="text-lg">{info.icon}</span><span className="font-bold text-sm text-foreground/90">{info.nome}</span></div>
-                        <Badge variant="secondary">{leads.length} leads</Badge>
+                    <div key={msg.id} className={`flex ${isCliente ? 'justify-start' : 'justify-end'}`}>
+                      <div className={`max-w-[80%] rounded-xl px-4 py-2 text-sm ${isCliente ? 'bg-card border rounded-tl-sm shadow-sm' : 'bg-primary text-primary-foreground rounded-tr-sm'}`}>
+                        {msg.texto}
                       </div>
-                      <div className="p-3 flex flex-col gap-2 min-h-24">
-                        {leads.map(lead => (
-                          <div key={lead.id} className="bg-muted/20 border p-2 rounded-lg text-xs flex justify-between">
-                            <span className="font-semibold">{lead.nome}</span>
-                            <span className="text-muted-foreground">Step {lead.funil_step || 1}</span>
-                          </div>
-                        ))}
-                        {leads.length === 0 && <span className="text-xs text-muted-foreground text-center my-auto">Vazio</span>}
-                      </div>
-                    </Card>
+                    </div>
                   );
                 })}
               </div>
-            </div>
-
-            <div>
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Follow-Ups Agendados (Manuais)</h2>
-              <RenderFollowupList items={followupsAtivos} />
-            </div>
+            )}
           </div>
-        </TabsContent>
-
-        <TabsContent value="concluidos" className="p-6 m-0 h-full overflow-hidden flex flex-col">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
-            
-            <div className="flex flex-col border rounded-xl bg-muted/10 overflow-hidden shadow-sm">
-              <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
-                <div className="flex items-center gap-2"><GitBranch size={16} className="text-primary"/><span>Fim de Funil (Não Fechou)</span></div>
-                <Badge variant="secondary">{leadsNaoFechou.length}</Badge>
-              </div>
-              <div className="p-2 bg-muted/30 text-[11px] text-muted-foreground border-b text-center">
-                Arraste um cliente para a coluna ao lado para agendar envios periódicos.
-              </div>
-              <ScrollArea className="flex-1 p-3">
-                <div className="space-y-2 pb-10">
-                  {leadsNaoFechou.map(lead => (
-                    <div 
-                      key={lead.id}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData('leadId', lead.id)}
-                      className="bg-card border p-3 rounded-lg flex flex-col gap-1 shadow-sm cursor-grab active:cursor-grabbing hover:border-primary/50 transition-colors"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-2">
-                          <GripVertical size={14} className="text-muted-foreground/40" />
-                          <span className="font-semibold text-sm">{lead.nome}</span>
-                        </div>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500" onClick={() => handleExcluirCliente(lead.id)} title="Excluir do Acompanhamento">
-                          <Trash2 size={12} />
-                        </Button>
-                      </div>
-                      <span className="text-xs text-muted-foreground ml-6">{lead.telefone}</span>
-                    </div>
-                  ))}
-                  {leadsNaoFechou.length === 0 && (
-                     <p className="text-xs text-center text-muted-foreground mt-8 italic">Nenhum cliente finalizou o funil recentemente.</p>
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-
-            <div 
-              className="flex flex-col border border-primary/20 rounded-xl bg-primary/5 overflow-hidden shadow-sm"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const leadId = e.dataTransfer.getData('leadId');
-                if (leadId) onDropToRecorrente(leadId);
-              }}
-            >
-              <div className="p-3 bg-card border-b font-semibold flex justify-between items-center text-sm text-foreground">
-                <div className="flex items-center gap-2"><CalendarClock size={16} className="text-primary"/><span>Funil Recorrente (Agendados)</span></div>
-                <Badge variant="default">{leadsRecorrentes.length}</Badge>
-              </div>
-              <ScrollArea className="flex-1 p-3">
-                <div className="space-y-2 pb-10">
-                  {leadsRecorrentes.map(lead => (
-                    <div key={lead.id} className="bg-card border p-3 rounded-lg flex justify-between items-center shadow-sm">
-                      <div>
-                        <span className="font-semibold text-sm block">{lead.nome}</span>
-                        {lead.funil_proximo && <span className="text-xs text-primary">Próx: {formatarData(lead.funil_proximo)}</span>}
-                      </div>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 hover:text-red-500" onClick={() => handlePararRecorrente(lead.id)} title="Parar Recorrência">
-                        <XCircle size={14} />
-                      </Button>
-                    </div>
-                  ))}
-                  {leadsRecorrentes.length === 0 && (
-                    <div className="flex flex-col items-center justify-center mt-12 text-muted-foreground opacity-50">
-                      <CalendarClock size={32} className="mb-2" />
-                      <p className="text-xs text-center">Arraste leads para cá</p>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-            
+          <div className="p-4 border-t bg-card text-center text-xs text-muted-foreground">
+            Para responder, acesse a <a href={`/chat?chat=${selectedLead?.id}`} className="text-primary font-semibold hover:underline">Central de Atendimento</a>.
           </div>
-          
-          <div className="mt-6 bg-card border rounded-xl overflow-hidden shadow-sm flex flex-col flex-none" style={{ height: '250px' }}>
-            <div className="p-3 bg-muted/30 border-b font-semibold text-sm flex justify-between">
-              <span>Histórico (Follow-ups Entregues)</span>
-            </div>
-            <ScrollArea className="flex-1 p-4">
-              <RenderFollowupList items={followupsConcluidos} />
-            </ScrollArea>
-          </div>
-        </TabsContent>
-      </Tabs>
+        </SheetContent>
+      </Sheet>
+
     </div>
   );
 }
