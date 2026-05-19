@@ -37,7 +37,7 @@ export interface FollowUpConfig {
 export interface Mensagem {
   id: number;
   texto: string;
-  origem: 'cliente' | 'bot' | 'loja';
+  origem: 'cliente' | 'bot' | 'loja' | 'humano_celular';
   mediaType: '' | 'image' | 'audio' | 'video' | 'contact' | 'document';
   mediaUrl?: string;
   mimeType?: string;

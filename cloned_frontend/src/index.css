@@ -39,14 +39,15 @@
     --info: 210 90% 65%;
     --info-foreground: 0 0% 100%;
 
-    --nav: 216 16% 94%;
-    --nav-foreground: 210 12% 46%;
-    --nav-active: 167 100% 33%;
+    --nav: 155 65% 14%; /* #0a3d2e - verde escuro */
+    --nav-foreground: 0 0% 100%; /* branco puro */
+    --nav-active: 0 0% 100%;
 
-    /* Chat Bubbles */
+    /* Chat Bubbles por Origem */
     --bubble-client: 0 0% 100%; /* branco */
-    --bubble-bot: 94 73% 88%; /* #dcf8c6 */
-    --bubble-store: 94 73% 88%; /* #dcf8c6 */
+    --bubble-bot: 152 60% 93%; /* #E1F5EE - verde-claro Deise */
+    --bubble-store: 157 60% 37%; /* #1D9E75 - verde operador */
+    --bubble-celular: 157 60% 37%; /* #1D9E75 - verde celular */
 
     --chat-bg: 38 31% 91%; /* #efeae2 */
 

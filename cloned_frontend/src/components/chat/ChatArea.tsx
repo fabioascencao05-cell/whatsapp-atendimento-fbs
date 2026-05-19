@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Image, Video, Clock, Trash2, ArrowLeft, X, CalendarClock, Power, PowerOff, Mic, Columns3, Check, CheckCheck } from 'lucide-react';
+import { Send, Paperclip, Image, Video, Clock, Trash2, ArrowLeft, X, CalendarClock, Power, PowerOff, Mic, Columns3, Check, CheckCheck, Smartphone, User, Bot } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -335,17 +335,19 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
                 <div className={cn(
                   'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm shadow-sm',
                   m.origem === 'cliente'
-                    ? 'bg-bubble-client text-foreground rounded-tl-sm border border-border/50'
+                    ? 'bg-white text-foreground rounded-tl-sm border border-border/50'
                     : m.origem === 'bot'
-                      ? 'bg-bubble-bot text-foreground rounded-tr-sm'
-                      : 'bg-bubble-store text-foreground rounded-tr-sm'
+                      ? 'bg-[#E1F5EE] text-foreground rounded-tr-sm'
+                      : 'bg-[#1D9E75] text-white rounded-tr-sm'
                 )}>
                   {m.origem !== 'cliente' && (
                     <span className={cn(
-                      'text-[10px] font-semibold block mb-0.5',
-                      m.origem === 'bot' ? 'text-success' : 'text-info'
+                      'text-[10px] font-semibold flex items-center gap-1 mb-0.5',
+                      m.origem === 'bot' ? 'text-emerald-700' : 'text-white/80'
                     )}>
-                      {m.origem === 'bot' ? '🤖 Bot' : '👤 Você'}
+                      {m.origem === 'bot' && <><Bot size={10} /> Deise</>}
+                      {m.origem === 'loja' && <><User size={10} /> Operador</>}
+                      {m.origem === 'humano_celular' && <><Smartphone size={10} /> Celular</>}
                     </span>
                   )}
 
@@ -398,8 +400,9 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
 
                   {/* Placeholder imagem sem URL */}
                   {m.mediaType === 'image' && !m.mediaUrl && (
-                    <div className="rounded-lg bg-secondary/50 flex items-center justify-center w-48 h-32 mb-1 text-muted-foreground text-[10px] border border-border/30">
-                      📷 Imagem
+                    <div className="rounded-lg bg-secondary/50 flex flex-col items-center justify-center w-48 h-32 mb-1 text-muted-foreground border border-border/30">
+                      <Image size={24} className="mb-1 opacity-40" />
+                      <span className="text-[10px]">Imagem indisponível</span>
                     </div>
                   )}
 
@@ -494,6 +497,21 @@ export function ChatArea({ conversa, mensagens, respostas, onMensagemEnviada, on
               <CalendarClock size={14} /> Confirmar e Agendar
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* Quick Reply Chips — sempre visíveis */}
+      {!showSchedule && respostas.length > 0 && (
+        <div className="border-t bg-card/50 px-3 py-2 flex gap-2 overflow-x-auto scrollbar-thin">
+          {respostas.map(r => (
+            <button
+              key={r.id}
+              onClick={() => { setTexto(r.texto); setShowQuick(false); }}
+              className="shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors whitespace-nowrap"
+            >
+              {r.atalho}
+            </button>
+          ))}
         </div>
       )}
 

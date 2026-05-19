@@ -707,7 +707,7 @@ app.post('/api/webhook', async (req, res) => {
         });
         
         await prisma.mensagem.create({
-            data: { conversaId: remoteJid, texto: texto || '', mediaType, mediaUrl: savedMediaUrl, wamid, origem: 'loja' }
+            data: { conversaId: remoteJid, texto: texto || '', mediaType, mediaUrl: savedMediaUrl, wamid, origem: 'humano_celular' }
         });
         
         return res.sendStatus(200);
@@ -1528,10 +1528,11 @@ cron.schedule('*/5 * * * *', async () => {
             }
         }
 
-        // 4. FUNIS AUTOMÁTICOS (nao_respondeu, orcamento_sumiu, recorrente)
+        // 4. FUNIS AUTOMÁTICOS (nao_respondeu, orcamento_sumiu, recorrente, reativacao)
         const leadsNoFunil = await prisma.conversa.findMany({
             where: {
                 deleted_at: null,
+                assumido_por: null, // TRAVA: nunca tocar em conversas com humano
                 funil_tipo: { not: null },
                 funil_proximo: { lte: agora },
             }

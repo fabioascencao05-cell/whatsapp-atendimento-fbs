@@ -16,12 +16,12 @@ export function AppNav() {
   const { logoUrl } = useLogo();
 
   return (
-    <nav className="flex flex-col items-center w-[60px] bg-nav py-4 gap-1 shrink-0 border-r border-border/50">
-      <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center mb-6 overflow-hidden">
+    <nav className="flex flex-col items-center w-[60px] bg-nav py-4 gap-1 shrink-0 border-r border-white/10">
+      <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center mb-6 overflow-hidden">
         {logoUrl ? (
           <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
         ) : (
-          <span className="text-primary-foreground font-extrabold text-[11px] tracking-tight">FBS</span>
+          <span className="text-white font-extrabold text-[11px] tracking-tight">FBS</span>
         )}
       </div>
       {navItems.map((item) => (
@@ -33,8 +33,8 @@ export function AppNav() {
             cn(
               'w-11 h-11 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all duration-200',
               isActive
-                ? 'bg-primary/20 text-primary'
-                : 'text-nav-foreground hover:bg-muted/30 hover:text-foreground'
+                ? 'bg-white/15 text-white'
+                : 'text-white/55 hover:bg-white/10 hover:text-white/80'
             )
           }
         >
